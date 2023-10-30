@@ -1,3 +1,15 @@
 /*
-!/kern/
 /kern/compile
+!/kern/arch
+!/kern/conf
+!/kern/dev
+!/kern/fs
+!/kern/include
+!/kern/lib
+!/kern/main
+!/kern/proc
+!/kern/syscall
+!/kern/test
+!/kern/thread
+!/kern/vfs
+!/kern/vm
