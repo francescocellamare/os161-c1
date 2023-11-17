@@ -30,6 +30,22 @@
 #ifndef _MIPS_TLB_H_
 #define _MIPS_TLB_H_
 
+
+/**
+ * TODO: tlb's workflow at page 2
+ * Docs: https://pages.cs.wisc.edu/~remzi/OSFEP/vm-tlbs.pdf
+ * TLB entry format: http://jhshi.me/2012/04/27/os161-tlb-miss-and-page-fault/index.html
+ * 
+ * entryhi: vaddr which generated the fault (20 bits) | 0s (12 bits)
+ * entrylo: paddr (20 bits) | no cache bit [UNUSED] (1 bit) {12th} | dirty bit (1 bit) {11th} | valid bit (1 bit) {10th} | 0s (9 bits)
+ * 
+ * dirty bit in os161: 0 ==> READONLY | 1 ==> WRITABLE
+ * 
+ * we could use another bit for setting a page as `dirty` with the original meaning for managing swapping
+ * 
+ * position has been defined according to the given masks in this file
+/
+
 /*
  * MIPS-specific TLB access functions.
  *
@@ -56,9 +72,26 @@
  */
 
 void tlb_random(uint32_t entryhi, uint32_t entrylo);
+
+// TODO: tlb_write should be modified for using the first available slot
 void tlb_write(uint32_t entryhi, uint32_t entrylo, uint32_t index);
 void tlb_read(uint32_t *entryhi, uint32_t *entrylo, uint32_t index);
 int tlb_probe(uint32_t entryhi, uint32_t entrylo);
+
+void tlb_init(void);
+void tlb_shutdown(void);
+
+/**
+ * returns the index number of the page which is going to be evicted
+*/
+int tlb_get_rr_victim(void);
+
+/**
+ * returns the index number of the page that matches the fault
+ * giving the virtual address which throwed the exception and using a mask
+ * over it for retriving the VPN
+*/
+int tlb_linear_search(vaddr_t va);
 
 /*
  * TLB entry fields.
@@ -77,14 +110,14 @@ int tlb_probe(uint32_t entryhi, uint32_t entrylo);
  */
 
 /* Fields in the high-order word */
-#define TLBHI_VPAGE   0xfffff000
+#define TLBHI_VPAGE   0xfffff000 // takes the first 20 bits
 /*      TLBHI_PID     0x00000fc0 */
 
 /* Fields in the low-order word */
-#define TLBLO_PPAGE   0xfffff000
-#define TLBLO_NOCACHE 0x00000800
-#define TLBLO_DIRTY   0x00000400
-#define TLBLO_VALID   0x00000200
+#define TLBLO_PPAGE   0xfffff000 // takes the first 20 bits
+#define TLBLO_NOCACHE 0x00000800 // 12th bit at 1
+#define TLBLO_DIRTY   0x00000400 // 11th bit at 1
+#define TLBLO_VALID   0x00000200 // 10th bit at 1
 /*      TLBLO_GLOBAL  0x00000100 */
 
 /*
@@ -100,6 +133,19 @@ int tlb_probe(uint32_t entryhi, uint32_t entrylo);
  */
 
 #define NUM_TLB  64
+
+/**
+ * fields:
+ * - n_page: number of pages in our TLB, it's initialized to the defined constant NUM_TLB
+ * - pages: array sized with n_pages in tlb_init() having as i-th item a physical address (if it exists)
+*/
+struct pagetable {
+    unsigned int n_page;
+    paddr_t* pages;
+};
+
+
+struct pagetable *tlb = NULL;
 
 
 #endif /* _MIPS_TLB_H_ */

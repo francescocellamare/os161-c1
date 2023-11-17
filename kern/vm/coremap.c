@@ -16,10 +16,18 @@
 /**
  * Lower layer of the whole system, here we manage all the physical pages keeping track of which as they refer to
  * as well as the virtual address of linked page.
+ * 
+ * LINK /home/os161user/os161/src/kern/vm/kmalloc.c
  * alloc_kpages and free_kpages are the only functions which can handle multiple frames allocation (so alloc_size is going to be
- * different from value 1) and they're just called by kernel using kmalloc() and kfree().
+ * different from value 1 ($) ) and they're just called by kernel using kmalloc() and kfree().
  * These two calls, respectively, alloc_kpages and free_kpages which perform frame reservation and removing.
+ * 
  * page_alloc() and page_free() work at frame granularity as a normal system managed by TLB should be.
+ * 
+ * ($) alloc size values:
+ *  initial state:              0 0 0 0 0 0 0 0 0 0 0 0
+ *  kmalloc -> 3 frames:        3 0 0 0 0 0 0 0 0 0 0 0
+ *  page_alloc -> 1 frame:      3 0 0 1 0 0 0 0 0 0 0 0
  * 
  * TODO:
  * 1. swapping
@@ -96,7 +104,7 @@ void coremap_shutdown() {
 paddr_t page_alloc(vaddr_t vaddr) {
     paddr_t pa;
     struct addrspace *as_cur;
-
+/
     if(!isTableActive()) return 0;
     vm_can_sleep();
 
@@ -205,6 +213,8 @@ static paddr_t getppages(unsigned long npages) {
 
     /* try freed pages first */
     addr = getfreeppages(npages);
+
+    // zero is returned if no freed page are available so we steal memory
     if (addr == 0) {
         /* call stealmem for a clean one */
         spinlock_acquire(&stealmem_lock);
@@ -212,7 +222,9 @@ static paddr_t getppages(unsigned long npages) {
         spinlock_release(&stealmem_lock);
         KASSERT(addr != 0);
     }
+    // after stealing memory we MUST have p_addr different from zero (due to ASSERT otherwise system crashes)
     if (addr!=0 && isTableActive()) {
+        // update the coremap removing `clean` pages  
         spinlock_acquire(&freemem_lock);
         coremap[addr/PAGE_SIZE].alloc_size = npages;
         coremap[addr/PAGE_SIZE].status = fixed;
@@ -220,6 +232,7 @@ static paddr_t getppages(unsigned long npages) {
         for(i = 1; i < npages; i++) {
             KASSERT( coremap[(addr/PAGE_SIZE)+i].alloc_size == 0 );
             coremap[(addr/PAGE_SIZE)+i].status = fixed;
+            // alloc_size is still 0
         }
         spinlock_release(&freemem_lock);
     } 

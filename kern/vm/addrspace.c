@@ -48,10 +48,10 @@
  * 
  * TODO: 
  * -manage what it's going to happen when an as is freed (ie set to free the coremap)
- * -as_activate
- * -as_deactivate
- * -as_prepare_load
- * -as_complete_load
+ * - //LINK ./addrspace.c#as_activate
+ * - //LINK ./addrspace.c#as_deactivate
+ * - //LINK ./addrspace.c#prepare_load
+ * - //LINK ./addrspace.c#complete_load
 */
 
 /**
@@ -110,6 +110,7 @@ as_destroy(struct addrspace *as)
 }
 
 /**
+ * ANCHOR[id=as_activate]
  * This function activates a given address space as the currently in use one
  * so we deactivate all the TLB's entries when a context switch is performed
 */
@@ -132,6 +133,9 @@ as_activate(void)
 	 */
 }
 
+/**
+ * ANCHOR[id=as_deactivate]
+*/
 void
 as_deactivate(void)
 {
@@ -143,6 +147,7 @@ as_deactivate(void)
 }
 
 /*
+ * ANCHOR[id=define_region] 
  * Set up a segment at virtual address VADDR of size MEMSIZE. The
  * segment in memory extends from VADDR up to (but not including)
  * VADDR+MEMSIZE.
@@ -177,6 +182,7 @@ as_define_region(struct addrspace *as, uint32_t type, uint32_t offset ,vaddr_t v
 }
 
 /**
+ * ANCHOR[id=prepare_load]
  * No idea, called after as_define_region() in load_elf()
 */
 int
@@ -191,6 +197,7 @@ as_prepare_load(struct addrspace *as)
 }
 
 /**
+ * ANCHOR[id=complete_load]
  * No idea, called after each segment load in memory but 
  * this should not be perfomed in demand paging
 */
