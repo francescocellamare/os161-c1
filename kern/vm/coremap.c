@@ -13,6 +13,19 @@
 #include <coremap.h>
 #include <vmc1.h>
 
+/**
+ * Lower layer of the whole system, here we manage all the physical pages keeping track of which as they refer to
+ * as well as the virtual address of linked page.
+ * alloc_kpages and free_kpages are the only functions which can handle multiple frames allocation (so alloc_size is going to be
+ * different from value 1) and they're just called by kernel using kmalloc() and kfree().
+ * These two calls, respectively, alloc_kpages and free_kpages which perform frame reservation and removing.
+ * page_alloc() and page_free() work at frame granularity as a normal system managed by TLB should be.
+ * 
+ * TODO:
+ * 1. swapping
+ * 2. check locks
+*/
+
 static struct coremap_entry *coremap = NULL; // coremap pointer
 
 static int nRamFrames = 0; // coremap current entries, updated at runtime by calling ram_getsize()
@@ -40,16 +53,21 @@ void coremap_init() {
     KASSERT(nRamFrames > 0);
 
     coremap_size = sizeof(coremap_entry) * nRamFrames;
+
+    // coremap is going to be initialized into the kernel space so that we need to `fix` these pages, automatically done by kmalloc
     coremap = kmalloc(coremap_size);
     KASSERT(coremap != NULL);
 
+
+    // set starting state for the structure
     for(i = 0; i < nRamFrames; i++) {
-        coremap[i].status = clean;
+        coremap[i].status = clean; 
         coremap[i].as = NULL;
         coremap[i].alloc_size = 0;
         coremap[i].vaddr_t = 0;
     }
 
+    // let it be usable
     spinlock_acquire(&freemem_lock);
     coremapActive = 1;
     spinlock_release(&freemem_lock);
@@ -63,9 +81,11 @@ void coremap_shutdown() {
 
     spinlock_acquire(&freemem_lock);
     coremapActive = 0;
+    // release each page
     for(i = 0; i < nRamFrames; i++) {
         page_free(i*PAGE_SIZE);
     }
+    // release the handler
     kfree(coremap);
     spinlock_release(&freemem_lock);
 }
@@ -96,7 +116,7 @@ static getppage_user(vaddr_t va, struct addrspace *as) {
     int i;
     paddr_t pa;
 
-    // looks for a previously freed page
+    // looks for a previously freed page using a linear search
     spinlock_acquire(&freemem_lock);
     for(i = 0; i < nRamFrames && !found; i++) {
         if(coremap[i].status == free) {
@@ -110,12 +130,12 @@ static getppage_user(vaddr_t va, struct addrspace *as) {
         pa = i*PAGE_SIZE;
     }
     else {
-        // asks for a clean one
+        // asks for a `clean` one
         spinlock_acquire(&stealmem_lock);
         pa = ram_stealmem(1);
         spinlock_release(&stealmem_lock);
 
-        // here the kernel will crash when there is no more memory
+        // here the kernel will crash when there is no more memory to steal
         KASSERT(pa != 0)
 
         pos = pa / PAGE_SIZE;

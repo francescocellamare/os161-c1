@@ -14,6 +14,19 @@
 #include <segments.h>
 #include <vmc1.h>
 
+
+/**
+ * Module for segment mgmt, a segment is defined as a section of an address space which is going to be loaded
+ * by function load_elf() defined into /kern/syscall/loadelf.c.
+ * For each segment a segment is defined calling at as_define_region() into load_elf().
+ * Each segment is loaded into a `fixed` page in kernel side but it SHOULD NOT crash the whole system.
+ * 
+ * TODO: 
+ * 1. change the load_elf function (according to as_define_region prototype)
+ * 2. 
+*/
+
+
 /**
  * Create a new empty segment struct and set to zero every field (TOBE checked)
 */

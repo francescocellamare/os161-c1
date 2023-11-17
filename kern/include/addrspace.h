@@ -36,6 +36,7 @@
 
 
 #include <vm.h>
+#include <segments.h>
 #include "opt-dumbvm.h"
 
 struct vnode;
@@ -58,9 +59,13 @@ struct addrspace {
         size_t as_npages2;
         paddr_t as_stackpbase;
 #else
-        /* Put stuff here for your VM system */
+        struct segment* code;
+        struct segment* data;       
+        struct segment* stack;
+        // struct segment* heap;        /*no heap management for this assignment, I hope*/
 #endif
 };
+
 
 /*
  * Functions in addrspace.c:
@@ -109,11 +114,13 @@ void              as_activate(void);
 void              as_deactivate(void);
 void              as_destroy(struct addrspace *);
 
-int               as_define_region(struct addrspace *as,
-                                   vaddr_t vaddr, size_t sz,
-                                   int readable,
-                                   int writeable,
-                                   int executable);
+// int               as_define_region(struct addrspace *as,
+//                                    vaddr_t vaddr, size_t sz,
+//                                    int readable,
+//                                    int writeable,
+//                                    int executable);
+int as_define_region(struct addrspace *as, uint32_t type, uint32_t offset ,vaddr_t vaddr, size_t memsize,
+		        uint32_t filesiz, int readable, int writeable, int executable, int segNo);
 int               as_prepare_load(struct addrspace *as);
 int               as_complete_load(struct addrspace *as);
 int               as_define_stack(struct addrspace *as, vaddr_t *initstackptr);

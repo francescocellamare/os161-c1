@@ -33,13 +33,32 @@
 #include <addrspace.h>
 #include <vm.h>
 #include <proc.h>
+#include <elf.h>
 
 /*
  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
  * assignment, this file is not compiled or linked or in any way
  * used. The cheesy hack versions in dumbvm.c are used instead.
+ * 
+ * To run the default DUMBVM just set to 1 opt-dumbvm.h option
  */
 
+
+/**
+ * 
+ * TODO: 
+ * -manage what it's going to happen when an as is freed (ie set to free the coremap)
+ * -as_activate
+ * -as_deactivate
+ * -as_prepare_load
+ * -as_complete_load
+*/
+
+/**
+ * This function allocates space, in the kernel, for a structure that does the bookkeeping for a single address space. 
+ * It does NOT allocate space for the stack, the program binary, etc., just the structure that hold information 
+ * about the address space. 
+*/
 struct addrspace *
 as_create(void)
 {
@@ -50,13 +69,17 @@ as_create(void)
 		return NULL;
 	}
 
-	/*
-	 * Initialize as needed.
-	 */
+	// new `fixed` pages will be created for each of them
+	as->code = seg_create();
+	as->data = seg_create();
+	as->stack = seg_create();
 
 	return as;
 }
 
+/**
+ * Copy an address space into another, no idea why it should be used
+*/
 int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
@@ -67,11 +90,9 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		return ENOMEM;
 	}
 
-	/*
-	 * Write this.
-	 */
-
-	(void)old;
+	newas->code = old->code;
+	newas->data = old->data;
+	newas->stack = newas->stack;
 
 	*ret = newas;
 	return 0;
@@ -80,13 +101,18 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 void
 as_destroy(struct addrspace *as)
 {
-	/*
-	 * Clean up as needed.
-	 */
+	KASSERT(as != NULL);
+	seg_destroy(as->code);
+	seg_destroy(as->data);
+	seg_destroy(as->stack);
 
 	kfree(as);
 }
 
+/**
+ * This function activates a given address space as the currently in use one
+ * so we deactivate all the TLB's entries when a context switch is performed
+*/
 void
 as_activate(void)
 {
@@ -120,29 +146,39 @@ as_deactivate(void)
  * Set up a segment at virtual address VADDR of size MEMSIZE. The
  * segment in memory extends from VADDR up to (but not including)
  * VADDR+MEMSIZE.
- *
- * The READABLE, WRITEABLE, and EXECUTABLE flags are set if read,
- * write, or execute permission should be set on the segment. At the
- * moment, these are ignored. When you write the VM system, you may
- * want to implement them.
+ * 
+ * All of these parameters can be taken by reading related elf file,
+ * calling this we can just defined CODE and DATA sections, stack one
+ * must be managed separately (using as_define_stack) because we do not
+ * need such parameters for a stack region, all is defined into function
+ * seg_define_stack()
  */
 int
-as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
-		 int readable, int writeable, int executable)
+as_define_region(struct addrspace *as, uint32_t type, uint32_t offset ,vaddr_t vaddr, size_t memsize,
+		 uint32_t filesz, int readable, int writeable, int executable, int segNo)
 {
-	/*
-	 * Write this.
-	 */
+	int res = 1;
+	int perm = 0x0;
 
-	(void)as;
-	(void)vaddr;
-	(void)memsize;
-	(void)readable;
-	(void)writeable;
-	(void)executable;
-	return ENOSYS;
+	if(readable)
+		perm = perm | PF_R;
+	if(writeable)
+		perm = perm | PF_W;
+	if(executable)
+		perm = perm | PF_X;
+
+	if(res == 0)
+		res = seg_define(as->code, type, offset, vaddr, filesz, memsize, perm);
+	else if(res == 1)
+		res = seg_define(as->data, type, offset, vaddr, filesz, memsize, perm);
+	
+	KASSERT(res == 0);	// segment defined correctly
+	return res;
 }
 
+/**
+ * No idea, called after as_define_region() in load_elf()
+*/
 int
 as_prepare_load(struct addrspace *as)
 {
@@ -154,6 +190,10 @@ as_prepare_load(struct addrspace *as)
 	return 0;
 }
 
+/**
+ * No idea, called after each segment load in memory but 
+ * this should not be perfomed in demand paging
+*/
 int
 as_complete_load(struct addrspace *as)
 {
@@ -165,15 +205,20 @@ as_complete_load(struct addrspace *as)
 	return 0;
 }
 
+/**
+ * Hands back the initial stack pointer for the new process
+ * so old data are going to be overwritten/zeroed
+ * 
+ * stackptr is a pointer to be setted and used by the caller 
+*/
 int
 as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 {
-	/*
-	 * Write this.
-	 */
+	int res;
 
-	(void)as;
+	res = seg_define_stack(as->stack);
 
+	KASSERT(res == 0) 
 	/* Initial user-level stack pointer */
 	*stackptr = USERSTACK;
 
