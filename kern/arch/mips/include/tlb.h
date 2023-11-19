@@ -44,7 +44,7 @@
  * we could use another bit for setting a page as `dirty` with the original meaning for managing swapping
  * 
  * position has been defined according to the given masks in this file
-/
+ */
 
 /*
  * MIPS-specific TLB access functions.
@@ -85,13 +85,6 @@ void tlb_shutdown(void);
  * returns the index number of the page which is going to be evicted
 */
 int tlb_get_rr_victim(void);
-
-/**
- * returns the index number of the page that matches the fault
- * giving the virtual address which throwed the exception and using a mask
- * over it for retriving the VPN
-*/
-int tlb_linear_search(vaddr_t va);
 
 /*
  * TLB entry fields.
@@ -134,18 +127,6 @@ int tlb_linear_search(vaddr_t va);
 
 #define NUM_TLB  64
 
-/**
- * fields:
- * - n_page: number of pages in our TLB, it's initialized to the defined constant NUM_TLB
- * - pages: array sized with n_pages in tlb_init() having as i-th item a physical address (if it exists)
-*/
-struct pagetable {
-    unsigned int n_page;
-    paddr_t* pages;
-};
-
-
-struct pagetable *tlb = NULL;
 
 
 #endif /* _MIPS_TLB_H_ */
