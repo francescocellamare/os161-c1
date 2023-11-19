@@ -38,7 +38,7 @@
 #include <vm.h>
 #include <segments.h>
 #include "opt-dumbvm.h"
-
+#include "opt-old.h"
 struct vnode;
 
 
@@ -114,13 +114,16 @@ void              as_activate(void);
 void              as_deactivate(void);
 void              as_destroy(struct addrspace *);
 
-// int               as_define_region(struct addrspace *as,
-//                                    vaddr_t vaddr, size_t sz,
-//                                    int readable,
-//                                    int writeable,
-//                                    int executable);
+#if OPT_OLD
+int               as_define_region(struct addrspace *as,
+                                   vaddr_t vaddr, size_t sz,
+                                   int readable,
+                                   int writeable,
+                                   int executable);
+#else
 int as_define_region(struct addrspace *as, uint32_t type, uint32_t offset ,vaddr_t vaddr, size_t memsize,
 		        uint32_t filesiz, int readable, int writeable, int executable, int segNo);
+#endif
 int               as_prepare_load(struct addrspace *as);
 int               as_complete_load(struct addrspace *as);
 int               as_define_stack(struct addrspace *as, vaddr_t *initstackptr);

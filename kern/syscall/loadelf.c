@@ -59,7 +59,7 @@
 #include <addrspace.h>
 #include <vnode.h>
 #include <elf.h>
-
+#include "opt-old.h"
 /*
  * Load a segment at virtual address VADDR. The segment in memory
  * extends from VADDR up to (but not including) VADDR+MEMSIZE. The
@@ -217,6 +217,7 @@ load_elf(struct vnode *v, vaddr_t *entrypoint)
 	 * to find where the phdr starts.
 	 */
 
+	kprintf("no ph: %d\n", eh.e_phnum);
 	for (i=0; i<eh.e_phnum; i++) {
 		off_t offset = eh.e_phoff + i*eh.e_phentsize;
 		uio_kinit(&iov, &ku, &ph, sizeof(ph), offset, UIO_READ);
@@ -242,20 +243,31 @@ load_elf(struct vnode *v, vaddr_t *entrypoint)
 				ph.p_type);
 			return ENOEXEC;
 		}
+		kprintf("%d) type: %d segment_offset: %x -- base_vaddr: %x -- file_size %x\n", i, ph.p_type, ph.p_offset, ph.p_vaddr, ph.p_filesz);
 
+		#if OPT_OLD
+		kprintf("old\n");
 		result = as_define_region(as,
 					  ph.p_vaddr, ph.p_memsz,
 					  ph.p_flags & PF_R,
 					  ph.p_flags & PF_W,
 					  ph.p_flags & PF_X);
+
+		#else
+		kprintf("smart\n");
+		result = as_define_region(as, 
+							ph.p_type, ph.p_offset, ph.p_vaddr, 
+							ph.p_memsz, ph.p_filesz, 
+							ph.p_flags & PF_R, 
+							ph.p_flags & PF_W, 
+							ph.p_flags & PF_X);
+		#endif
 		if (result) {
 			return result;
 		}
 	}
 
-	/**
-	 * 
-	*/
+	#if OPT_OLD
 	result = as_prepare_load(as);
 	if (result) {
 		return result;
@@ -291,6 +303,7 @@ load_elf(struct vnode *v, vaddr_t *entrypoint)
 			return ENOEXEC;
 		}
 
+
 		result = load_segment(as, v, ph.p_offset, ph.p_vaddr,
 				      ph.p_memsz, ph.p_filesz,
 				      ph.p_flags & PF_X);
@@ -303,6 +316,7 @@ load_elf(struct vnode *v, vaddr_t *entrypoint)
 	if (result) {
 		return result;
 	}
+	#endif
 
 	*entrypoint = eh.e_entry;
 
