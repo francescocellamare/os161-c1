@@ -73,7 +73,6 @@
 
 void tlb_random(uint32_t entryhi, uint32_t entrylo);
 
-// TODO: tlb_write should be modified for using the first available slot
 void tlb_write(uint32_t entryhi, uint32_t entrylo, uint32_t index);
 void tlb_read(uint32_t *entryhi, uint32_t *entrylo, uint32_t index);
 int tlb_probe(uint32_t entryhi, uint32_t entrylo);

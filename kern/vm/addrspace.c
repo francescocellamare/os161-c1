@@ -50,8 +50,6 @@
  * -manage what it's going to happen when an as is freed (ie set to free the coremap)
  * - //LINK ./addrspace.c#as_activate
  * - //LINK ./addrspace.c#as_deactivate
- * - //LINK ./addrspace.c#prepare_load
- * - //LINK ./addrspace.c#complete_load
 */
 
 /**
@@ -128,9 +126,7 @@ as_activate(void)
 		return;
 	}
 
-	/*
-	 * Write this.
-	 */
+	
 }
 
 /**
