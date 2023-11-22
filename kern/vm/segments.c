@@ -24,7 +24,6 @@
  * 
  * TODO: 
  * 1. change the load_elf function according to as_define_region prototype in //LINK /home/os161user/os161/src/kern/vm/addrspace.c#define_region
- * 2. 
 */
 
 
@@ -66,7 +65,6 @@ int seg_define(struct segment* seg, uint32_t p_type, uint32_t p_offset, uint32_t
     seg->p_filesz = p_filesz;
     seg->p_memsz = p_memsz;
     seg->p_permission = p_permission;
-
 
     return 0;
 }

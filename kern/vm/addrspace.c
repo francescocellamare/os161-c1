@@ -49,7 +49,6 @@
  * TODO: 
  * -manage what it's going to happen when an as is freed (ie set to free the coremap)
  * - //LINK ./addrspace.c#as_activate
- * - //LINK ./addrspace.c#as_deactivate
 */
 
 /**
@@ -71,6 +70,7 @@ as_create(void)
 	as->code = seg_create();
 	as->data = seg_create();
 	as->stack = seg_create();
+	as->pt = pt_create();
 
 	return as;
 }
@@ -90,7 +90,8 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 
 	newas->code = old->code;
 	newas->data = old->data;
-	newas->stack = newas->stack;
+	newas->stack = old->stack;
+	newas->pt = old->pt
 
 	*ret = newas;
 	return 0;
@@ -115,6 +116,7 @@ as_destroy(struct addrspace *as)
 void
 as_activate(void)
 {
+	int i, spl;
 	struct addrspace *as;
 
 	as = proc_getas();
@@ -126,6 +128,14 @@ as_activate(void)
 		return;
 	}
 
+	/* Disable interrupts on this CPU while frobbing the TLB. */
+	spl = splhigh();
+
+	for (i=0; i<NUM_TLB; i++) {
+		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+	}
+
+	splx(spl);
 	
 }
 
@@ -161,6 +171,8 @@ as_define_region(struct addrspace *as, uint32_t type, uint32_t offset ,vaddr_t v
 	int res = 1;
 	int perm = 0x0;
 
+	KASSERT(segNo < 2);
+
 	if(readable)
 		perm = perm | PF_R;
 	if(writeable)
@@ -168,11 +180,11 @@ as_define_region(struct addrspace *as, uint32_t type, uint32_t offset ,vaddr_t v
 	if(executable)
 		perm = perm | PF_X;
 
-	if(res == 0)
+	if(segNo == 0)
 		res = seg_define(as->code, type, offset, vaddr, filesz, memsize, perm);
-	else if(res == 1)
+	else if(segNo == 1)
 		res = seg_define(as->data, type, offset, vaddr, filesz, memsize, perm);
-	
+		
 	KASSERT(res == 0);	// segment defined correctly
 	return res;
 }
