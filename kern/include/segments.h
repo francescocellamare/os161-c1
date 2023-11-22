@@ -2,6 +2,7 @@
 #define _SEGMENTS_H_
 
 #include <types.h>
+#include <pt.h>
 
 /**
  * (from elf.h)==========================
@@ -26,8 +27,6 @@ struct segment {
 	uint32_t	p_filesz;    /* Size of data within file */
 	uint32_t	p_memsz;     /* Size of data to be loaded into memory*/
 	uint32_t	p_permission;   
-
-    // TODO: page table pointer should be added or made global as proc struct
 
     /*  
     flow is: 
