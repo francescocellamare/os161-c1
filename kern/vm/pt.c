@@ -32,7 +32,9 @@ static int get_d(vaddr_t va) {
     return va & D_MASK;
 }
 
-
+/**
+ * really, why did I write this?
+*/
 static unsigned int get_npages(uint32_t memsize, vaddr_t va) {
     unsigned int npages;
 
@@ -53,7 +55,7 @@ struct pt_directory* pt_create(void) {
     KASSERT(pt != NULL);
 
     pt->size = SIZE_PT_OUTER;
-    pt->pages = kmalloc(sizeof(pt_outer_entry)*SIZE_PT_OUTER);
+    pt->pages = kmalloc(sizeof(struct pt_outer_entry)*SIZE_PT_OUTER);
     KASSERT(pt->pages != NULL);
 
     for(i = 0; i < pt->size; i++) {
@@ -93,7 +95,7 @@ static void pt_define_inner(struct pt_directory* pt, vaddr_t va) {
     KASSERT(pt->pages[index].valid == 0);
 
     pt->pages[index].size = SIZE_PT_INNER;
-    pt->pages[index].pages = kmalloc(sizeof(pt_inner_entry)*SIZE_PT_INNER);
+    pt->pages[index].pages = kmalloc(sizeof(struct pt_inner_entry)*SIZE_PT_INNER);
     KASSERT(pt->pages[index] != NULL);
 
     for(i = 0; i < pt->pages[index].size; i++) {
@@ -102,6 +104,16 @@ static void pt_define_inner(struct pt_directory* pt, vaddr_t va) {
     }
 }
 
+/**
+ * Having a virtual address as input, firstly, we look for p1 
+ * and p2 for indexing the two-level pagetable used by the 
+ * system and then we check for the entry. The following cases
+ * may happen:
+ * 1. found a page so its PAGE FRAME NUMBER is returned
+ * 2. found an invalid page so PFN_NOT_USED constant is returned
+ * 3. the outer page table (indexed by p1) doesn't contain a
+ * valid entry, this should not occur in standard behavior
+*/
 paddr_t pt_get_pa(struct pt_directory* pt, vaddr_t va) {
     unsigned int p1, p2, d;
 
@@ -130,6 +142,12 @@ paddr_t pt_get_pa(struct pt_directory* pt, vaddr_t va) {
     return pa;
 }
 
+/**
+ * This function is going to set a physical address (PFN) into 
+ * the pagetable using the given virtual address as the one above
+ * defining p1 and p2. If the system wants an entry of a still 
+ * `undefined` inner pagetable, it is managed by initializing it  
+*/
 void pt_set_pa(struct pt_directory* pt, vaddr_t va, paddr_t pa) {
     unsigned int p1, p2, d;
 

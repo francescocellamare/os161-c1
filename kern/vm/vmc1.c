@@ -51,7 +51,7 @@ void vm_fault(int faulttype, vaddr_t faultaddress)
     switch (faulttype) {
         case VM_FAULT_READONLY:
             // panic("dumbvm: got VM_FAULT_READONLY\n");
-            return EFAULT;
+            return EACCES;
         case VM_FAULT_READ:
         case VM_FAULT_WRITE:
             break;
@@ -82,14 +82,15 @@ void vm_fault(int faulttype, vaddr_t faultaddress)
 
     // if not exists then allocate a new frame
     if(pa == PFN_NOT_USED) {
-        // TODO
-        
+        // asks for a new frame from the coremap
+        pa = page_alloc(faultaddress);
+        // update the pagetable with the new PFN 
+        KASSERT((pa & PAGE_FRAME) == pa);
+        pt_set_pa(as->pt, faultaddress, pa);
     }
     // otherwise update the TLB
-
-	/* make sure it's page-aligned */
-	KASSERT((pa & PAGE_FRAME) == pa);
-
+    
+/*
     spl = splhigh();
 
     // this for should be replaced with tlb_probe() and tlb_write()
@@ -108,5 +109,6 @@ void vm_fault(int faulttype, vaddr_t faultaddress)
 
     kprintf("dumbvm: Ran out of TLB entries - cannot handle page fault\n");
 	splx(spl);
+*/
 	return EFAULT;
 }

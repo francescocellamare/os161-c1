@@ -104,7 +104,7 @@ void coremap_shutdown() {
 paddr_t page_alloc(vaddr_t vaddr) {
     paddr_t pa;
     struct addrspace *as_cur;
-/
+
     if(!isTableActive()) return 0;
     vm_can_sleep();
 
