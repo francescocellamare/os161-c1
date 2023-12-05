@@ -38,15 +38,16 @@ void vm_can_sleep(void)
     }
 }
 
-void vm_fault(int faulttype, vaddr_t faultaddress)
+int vm_fault(int faulttype, vaddr_t faultaddress)
 {
     int i, spl;
 	uint32_t ehi, elo;
 	struct addrspace *as;
     paddr_t pa; 
 
-    if(faulttype == NULL)
-        return EFAULT;
+    // todo
+   	faultaddress &= PAGE_FRAME;
+
 
     switch (faulttype) {
         case VM_FAULT_READONLY:
@@ -90,7 +91,7 @@ void vm_fault(int faulttype, vaddr_t faultaddress)
     }
     // otherwise update the TLB
     
-/*
+
     spl = splhigh();
 
     // this for should be replaced with tlb_probe() and tlb_write()
@@ -109,6 +110,14 @@ void vm_fault(int faulttype, vaddr_t faultaddress)
 
     kprintf("dumbvm: Ran out of TLB entries - cannot handle page fault\n");
 	splx(spl);
-*/
+
 	return EFAULT;
+}
+
+//TODO - Just a copy of the dumbvm one till now
+void
+vm_tlbshootdown(const struct tlbshootdown *ts)
+{
+	(void)ts;
+	panic("dumbvm tried to do tlb shootdown?!\n");
 }

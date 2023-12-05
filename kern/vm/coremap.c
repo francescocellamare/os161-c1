@@ -43,7 +43,7 @@ static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 
 static int coremapActive = 0; //flag for checking if coremap functionalities are available
 
-static int isTableActive () {
+static int isMapActive () {
   int active;
   spinlock_acquire(&freemem_lock);
   active = coremapActive;
@@ -60,7 +60,7 @@ void coremap_init() {
     nRamFrames = ((int)ram_getsize())/PAGE_SIZE;  
     KASSERT(nRamFrames > 0);
 
-    coremap_size = sizeof(coremap_entry) * nRamFrames;
+    coremap_size = sizeof(struct coremap_entry) * nRamFrames;
 
     // coremap is going to be initialized into the kernel space so that we need to `fix` these pages, automatically done by kmalloc
     coremap = kmalloc(coremap_size);
@@ -72,7 +72,7 @@ void coremap_init() {
         coremap[i].status = clean; 
         coremap[i].as = NULL;
         coremap[i].alloc_size = 0;
-        coremap[i].vaddr_t = 0;
+        coremap[i].vaddr = 0;
     }
 
     // let it be usable
@@ -85,7 +85,7 @@ void coremap_init() {
  * Releases the coremap's memory and disables it
 */
 void coremap_shutdown() {
-    int i, res;
+    int i;
 
     spinlock_acquire(&freemem_lock);
     coremapActive = 0;
@@ -98,28 +98,105 @@ void coremap_shutdown() {
     spinlock_release(&freemem_lock);
 }
 
+
 /**
- * User side, wrapper of getppage_user
+ * Same behavior of dumbvm's getfreeppages adapted to the coremap structure
 */
-paddr_t page_alloc(vaddr_t vaddr) {
-    paddr_t pa;
-    struct addrspace *as_cur;
+static paddr_t getfreeppages(unsigned long npages) {
+    paddr_t addr;	
+    long i, first, found;
 
-    if(!isTableActive()) return 0;
-    vm_can_sleep();
+    if (!isMapActive()) return 0; 
+    spinlock_acquire(&freemem_lock);
+    for (i=0,first=found=-1; i<nRamFrames; i++) {
+        if (coremap[i].status == free) {
+        if (i==0 || !coremap[i-1].status == free) 
+            first = i;
+        if (i-first+1 >= (long)npages) {
+            found = first;
+            break;
+        }
+        }
+    }
+        
+    if (found>=0) {
+        for (i=found; i<found+(long)npages; i++) {
+            coremap[i].status = fixed;
+            KASSERT(coremap[i].alloc_size == 0);
+        }
+        coremap[found].alloc_size = npages;
+        addr = (paddr_t) found*PAGE_SIZE;
+    }
+    else {
+        addr = 0;
+    }
 
-    as_curr = proc_getas();
-    KASSERT(as_curr != NULL)
+    spinlock_release(&freemem_lock);
 
-    pa = getppage_user(vaddr, as);
-    return pa;
+    return addr;
 }
 
+/**
+ * Same behavior of dumbvm's freeppages adapted to the coremap structure
+*/
+static int 
+freeppages(paddr_t addr, unsigned long npages) {
+  long i, first;	
+
+  if (!isMapActive()) return 0; 
+  first = addr/PAGE_SIZE;
+  KASSERT(nRamFrames>first);
+
+  spinlock_acquire(&freemem_lock);
+  for (i=first; i<first+(long)npages; i++) {
+    coremap[i].status = free;
+    coremap[i].as = NULL;
+    coremap[i].alloc_size = 0;
+  }
+  spinlock_release(&freemem_lock);
+
+  return 1;
+}
+/**
+ * Same behavior of dumbvm's getppages adapted to the coremap structure
+*/
+static paddr_t getppages(unsigned long npages) {
+    unsigned long i;
+    paddr_t addr;
+
+    /* try freed pages first */
+    addr = getfreeppages(npages);
+
+    // zero is returned if no freed page are available so we steal memory
+    if (addr == 0) {
+        /* call stealmem for a clean one */
+        spinlock_acquire(&stealmem_lock);
+        addr = ram_stealmem(npages);
+        spinlock_release(&stealmem_lock);
+        KASSERT(addr != 0);
+    }
+    // after stealing memory we MUST have p_addr different from zero (due to ASSERT otherwise system crashes)
+    if (addr!=0 && isMapActive()) {
+        // update the coremap removing `clean` pages  
+        spinlock_acquire(&freemem_lock);
+        coremap[addr/PAGE_SIZE].alloc_size = npages;
+        coremap[addr/PAGE_SIZE].status = fixed;
+
+        for(i = 1; i < npages; i++) {
+            KASSERT( coremap[(addr/PAGE_SIZE)+i].alloc_size == 0 );
+            coremap[(addr/PAGE_SIZE)+i].status = fixed;
+            // alloc_size is still 0
+        }
+        spinlock_release(&freemem_lock);
+    } 
+
+    return addr;
+}
 /**
  * Looks for a freed page if available otherwise a new frame is stolen by ram_stealmem. 
  * System is going to crash if there is no memory
 */
-static getppage_user(vaddr_t va, struct addrspace *as) {
+static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
     int found = 0, pos;
     int i;
     paddr_t pa;
@@ -144,7 +221,7 @@ static getppage_user(vaddr_t va, struct addrspace *as) {
         spinlock_release(&stealmem_lock);
 
         // here the kernel will crash when there is no more memory to steal
-        KASSERT(pa != 0)
+        KASSERT(pa != 0);
 
         pos = pa / PAGE_SIZE;
 
@@ -161,6 +238,25 @@ static getppage_user(vaddr_t va, struct addrspace *as) {
 }
 
 /**
+ * User side, wrapper of getppage_user
+*/
+paddr_t page_alloc(vaddr_t vaddr) {
+    paddr_t pa;
+    struct addrspace *as_curr;
+
+    if(!isMapActive()) return 0;
+    vm_can_sleep();
+
+    as_curr = proc_getas();
+    KASSERT(as_curr != NULL);
+
+    pa = getppage_user(vaddr, as_curr);
+    return pa;
+}
+
+
+
+/**
  * User side, makes a page as free state
 */
 void page_free(paddr_t addr) {
@@ -175,7 +271,7 @@ void page_free(paddr_t addr) {
     coremap[pos].status = free;
     coremap[pos].as = NULL;
     coremap[pos].alloc_size = 0;
-    coremap[pos].vaddr_t = 0;
+    coremap[pos].vaddr = 0;
     spinlock_release(&freemem_lock);
 }
 
@@ -197,7 +293,7 @@ vaddr_t alloc_kpages(unsigned long npages) {
  * Kernel side, wrapper of freeppages
 */
 void free_kpages(vaddr_t addr) {
-  if (isTableActive()) {
+  if (isMapActive()) {
     paddr_t paddr = addr - MIPS_KSEG0;
     long first = paddr/PAGE_SIZE;	
     KASSERT(nRamFrames>first);
@@ -205,96 +301,3 @@ void free_kpages(vaddr_t addr) {
   }
 }
 
-/**
- * Same behavior of dumbvm's getppages adapted to the coremap structure
-*/
-static paddr_t getppages(unsigned long npages) {
-    paddr_t addr;
-
-    /* try freed pages first */
-    addr = getfreeppages(npages);
-
-    // zero is returned if no freed page are available so we steal memory
-    if (addr == 0) {
-        /* call stealmem for a clean one */
-        spinlock_acquire(&stealmem_lock);
-        addr = ram_stealmem(npages);
-        spinlock_release(&stealmem_lock);
-        KASSERT(addr != 0);
-    }
-    // after stealing memory we MUST have p_addr different from zero (due to ASSERT otherwise system crashes)
-    if (addr!=0 && isTableActive()) {
-        // update the coremap removing `clean` pages  
-        spinlock_acquire(&freemem_lock);
-        coremap[addr/PAGE_SIZE].alloc_size = npages;
-        coremap[addr/PAGE_SIZE].status = fixed;
-
-        for(i = 1; i < npages; i++) {
-            KASSERT( coremap[(addr/PAGE_SIZE)+i].alloc_size == 0 );
-            coremap[(addr/PAGE_SIZE)+i].status = fixed;
-            // alloc_size is still 0
-        }
-        spinlock_release(&freemem_lock);
-    } 
-
-    return addr;
-}
-
-/**
- * Same behavior of dumbvm's getfreeppages adapted to the coremap structure
-*/
-static paddr_t getfreeppages(unsigned long npages) {
-    paddr_t addr;	
-    long i, first, found;
-
-    if (!isTableActive()) return 0; 
-    spinlock_acquire(&freemem_lock);
-    for (i=0,first=found=-1; i<nRamFrames; i++) {
-        if (coremap[i].status == free) {
-        if (i==0 || !coremap[i-1].status == free) 
-            first = i;
-        if (i-first+1 >= npages) {
-            found = first;
-            break;
-        }
-        }
-    }
-        
-    if (found>=0) {
-        for (i=found; i<found+npages; i++) {
-            coremap[i].status = fixed;
-            KASSERT(coremap[i].alloc_size == 0);
-        }
-        coremap[found].alloc_size = npages;
-        addr = (paddr_t) found*PAGE_SIZE;
-    }
-    else {
-        addr = 0;
-    }
-
-    spinlock_release(&freemem_lock);
-
-    return addr;
-}
-
-/**
- * Same behavior of dumbvm's freeppages adapted to the coremap structure
-*/
-static int 
-freeppages(paddr_t addr, unsigned long npages) {
-  long i, first;	
-
-  if (!isTableActive()) return 0; 
-  first = addr/PAGE_SIZE;
-  KASSERT(nRamFrames>first);
-
-  spinlock_acquire(&freemem_lock);
-  for (i=first; i<first+npages; i++) {
-    coremap[i].status = free;
-    coremap[i].as = NULL;
-    coremap[i].alloc_size = 0;
-  }
-  spinlock_release(&freemem_lock);
-
-  return 1;
-}

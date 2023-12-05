@@ -45,7 +45,7 @@ struct pt_directory* pt_create(void);
 /*
     Static function which is called whenever a new inner pt is needed (so it becames valid)
 */
-static void pt_define_inner(struct pt_directory* pt);
+void pt_define_inner(struct pt_directory* pt, vaddr_t va);
 
 /*
     Free the whole structure
@@ -55,7 +55,7 @@ void pt_destroy(struct pt_directory* pt);
 /*
     Free the given inner table
 */
-static void pt_destroy_inner(struct pt_outer_entry pt_inner);
+void pt_destroy_inner(struct pt_outer_entry pt_inner);
 
 /*
     Get the physical address having a virtual address, PFN_NOT_USED if it is not valid

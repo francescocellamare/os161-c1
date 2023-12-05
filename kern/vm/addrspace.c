@@ -30,11 +30,12 @@
 #include <types.h>
 #include <kern/errno.h>
 #include <lib.h>
+#include <spl.h>
 #include <addrspace.h>
 #include <vm.h>
 #include <proc.h>
 #include <elf.h>
-#include <tlb.h>
+#include <mips/tlb.h>
 
 /*
  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
@@ -92,7 +93,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	newas->code = old->code;
 	newas->data = old->data;
 	newas->stack = old->stack;
-	newas->pt = old->pt
+	newas->pt = old->pt;
 
 	*ret = newas;
 	return 0;
@@ -234,7 +235,7 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 
 	res = seg_define_stack(as->stack);
 
-	KASSERT(res == 0) 
+	KASSERT(res == 0); 
 	/* Initial user-level stack pointer */
 	*stackptr = USERSTACK;
 

@@ -20,10 +20,10 @@ enum status_t {
  * vaddr in [0x80000000, 0x80000000+ram_size]
 */
 struct coremap_entry {
-    struct addrspace *as,
-    enum status_t status,
-    vaddr_t vaddr,
-    unsigned int alloc_size
+    struct addrspace *as;
+    enum status_t status;
+    vaddr_t vaddr;
+    unsigned int alloc_size;
 };
 
 void coremap_init(void);
