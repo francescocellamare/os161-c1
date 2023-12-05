@@ -13,12 +13,24 @@
 #include <coremap.h>
 #include <vmc1.h>
 
+static unsigned int current_victim;
+
+static unsigned int tlb_get_rr_victim(void) {
+    unsigned int victim;
+    victim = current_victim;
+
+    
+    current_victim = (current_victim + 1) % NUM_TLB;
+    return victim;
+}
+
 /**
  * page_alloc replaces getppages in the kmalloc
  */
 void vm_bootstrap(void)
 {
     coremap_init();
+    current_victim = 0;
 }
 
 void vm_shutdown(void)
@@ -40,7 +52,8 @@ void vm_can_sleep(void)
 
 int vm_fault(int faulttype, vaddr_t faultaddress)
 {
-    int i, spl;
+    int i, spl, found;
+    unsigned int victim;
 	uint32_t ehi, elo;
 	struct addrspace *as;
     paddr_t pa; 
@@ -94,19 +107,32 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 
     spl = splhigh();
 
-    // this for should be replaced with tlb_probe() and tlb_write()
-	for (i=0; i<NUM_TLB; i++) {
-		tlb_read(&ehi, &elo, i);
-		if (elo & TLBLO_VALID) {
-			continue;
-		}
-		ehi = faultaddress;
-		elo = pa | TLBLO_DIRTY | TLBLO_VALID;
-		DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, pa);
-		tlb_write(ehi, elo, i);
-		splx(spl);
-		return 0;
-	}
+
+    found = tlb_probe(faultaddress, 0);
+    if(found < 0) {
+        // not found
+        for (i=0; i<NUM_TLB; i++) {
+            tlb_read(&ehi, &elo, i);
+            if (elo & TLBLO_VALID) {
+                continue;
+            }
+            ehi = faultaddress;
+            elo = pa | TLBLO_DIRTY | TLBLO_VALID;
+            DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, pa);
+            tlb_write(ehi, elo, i);
+            splx(spl);
+            return 0;
+        }
+        // choose a victim
+
+        ehi = faultaddress;
+        elo = pa | TLBLO_DIRTY | TLBLO_VALID;
+        victim = tlb_get_rr_victim();
+        tlb_write(ehi, elo, victim);
+        return 0;
+    }
+    // else found ==> duplication so not needed
+
 
     kprintf("dumbvm: Ran out of TLB entries - cannot handle page fault\n");
 	splx(spl);

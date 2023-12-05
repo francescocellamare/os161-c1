@@ -25,7 +25,7 @@ static int get_p1(vaddr_t va) {
 }
 
 static int get_p2(vaddr_t va) {
-    return (va & P2_MASK) >> 10;
+    return (va & P2_MASK) >> 12;
 }
 
 static int get_d(vaddr_t va) {
