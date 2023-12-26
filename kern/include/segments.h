@@ -3,6 +3,7 @@
 
 #include <types.h>
 #include <pt.h>
+#include <addrspace.h>
 
 /**
  * (from elf.h)==========================
@@ -27,6 +28,7 @@ struct segment {
 	uint32_t	p_filesz;    /* Size of data within file */
 	uint32_t	p_memsz;     /* Size of data to be loaded into memory*/
 	uint32_t	p_permission;   
+    struct vnode *vnode;
 
     /*  
     flow is: 
@@ -43,8 +45,10 @@ struct segment {
 // for each define operation over a segment checks for avoiding multi-define operations are performed by using KASSERT 
 
 struct segment* seg_create(void);
-int seg_define(struct segment* seg, uint32_t p_type, uint32_t p_offset, uint32_t p_vaddr, uint32_t p_filesz, uint32_t p_memsz, uint32_t p_permission);
+int seg_define(struct segment* seg, uint32_t p_type, uint32_t p_offset, uint32_t p_vaddr, uint32_t p_filesz, uint32_t p_memsz, uint32_t p_permission, struct vnode *);
 void seg_destroy(struct segment*);
 int seg_define_stack(struct segment*);
-
+int seg_load_page(struct segment* seg, vaddr_t va, paddr_t pa);
+int seg_copy(struct segment *old, struct segment **ret);
+void zero(paddr_t paddr, size_t n);
 #endif

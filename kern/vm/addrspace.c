@@ -35,6 +35,7 @@
 #include <vm.h>
 #include <proc.h>
 #include <elf.h>
+#include <vfs.h>
 #include <mips/tlb.h>
 
 /*
@@ -84,6 +85,7 @@ int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
 	struct addrspace *newas;
+	int result;
 
 	newas = as_create();
 	if (newas==NULL) {
@@ -95,6 +97,13 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	newas->stack = old->stack;
 	newas->pt = old->pt;
 
+	result = seg_copy(old->code, &newas->code);
+	KASSERT(result == 0);
+	result = seg_copy(old->data, &newas->data);
+	KASSERT(result == 0);
+	result = seg_copy(old->stack, &newas->stack);
+	KASSERT(result == 0);
+
 	*ret = newas;
 	return 0;
 }
@@ -102,10 +111,15 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 void
 as_destroy(struct addrspace *as)
 {
+	struct vnode *v;
+
 	KASSERT(as != NULL);
+
+	v = as->code->vnode;
 	seg_destroy(as->code);
 	seg_destroy(as->data);
 	seg_destroy(as->stack);
+	vfs_close(v);
 
 	kfree(as);
 }
@@ -168,7 +182,7 @@ as_deactivate(void)
  */
 int
 as_define_region(struct addrspace *as, uint32_t type, uint32_t offset ,vaddr_t vaddr, size_t memsize,
-		 uint32_t filesz, int readable, int writeable, int executable, int segNo)
+		 uint32_t filesz, int readable, int writeable, int executable, int segNo, struct vnode *v)
 {
 	int res = 1;
 	int perm = 0x0;
@@ -183,9 +197,9 @@ as_define_region(struct addrspace *as, uint32_t type, uint32_t offset ,vaddr_t v
 		perm = perm | PF_X;
 
 	if(segNo == 0)
-		res = seg_define(as->code, type, offset, vaddr, filesz, memsize, perm);
+		res = seg_define(as->code, type, offset, vaddr, filesz, memsize, perm, v);
 	else if(segNo == 1)
-		res = seg_define(as->data, type, offset, vaddr, filesz, memsize, perm);
+		res = seg_define(as->data, type, offset, vaddr, filesz, memsize, perm, v);
 		
 	KASSERT(res == 0);	// segment defined correctly
 	return res;
@@ -214,10 +228,6 @@ as_prepare_load(struct addrspace *as)
 int
 as_complete_load(struct addrspace *as)
 {
-	/*
-	 * Write this.
-	 */
-
 	(void)as;
 	return 0;
 }
@@ -240,5 +250,35 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	*stackptr = USERSTACK;
 
 	return 0;
+}
+
+struct segment* as_get_segment(struct addrspace *as, vaddr_t va) {
+	
+	KASSERT(as != NULL);
+	KASSERT(va > 0);
+
+	uint32_t base_seg1, top_seg1;
+	uint32_t base_seg2, top_seg2;
+	uint32_t base_seg3, top_seg3;
+
+	base_seg1 = as->code->p_vaddr;
+	top_seg1 = ( as->code->p_vaddr + as->code->p_memsz);
+
+	base_seg2 = as->data->p_vaddr;
+	top_seg2 = ( as->data->p_vaddr + as->data->p_memsz);
+
+	base_seg3 = as->stack->p_vaddr;
+	top_seg3 = ( as->stack->p_vaddr + as->stack->p_memsz);
+
+	if(va >= base_seg1 && va <= top_seg1) {
+		return as->code;
+	}
+	else if(va >= base_seg2 && va <= top_seg2) {
+		return as->data;
+	}
+	else if (va >= base_seg3 && va <= top_seg3) {
+		return as->stack;
+	}
+	return NULL;
 }
 

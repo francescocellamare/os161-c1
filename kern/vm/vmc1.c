@@ -10,6 +10,7 @@
 #include <addrspace.h>
 #include <vm.h>
 
+#include <elf.h>
 #include <coremap.h>
 #include <vmc1.h>
 
@@ -52,14 +53,16 @@ void vm_can_sleep(void)
 
 int vm_fault(int faulttype, vaddr_t faultaddress)
 {
-    int i, spl, found;
+    int i, spl, found, new_page, result;
     unsigned int victim;
 	uint32_t ehi, elo;
 	struct addrspace *as;
     paddr_t pa; 
+    struct segment * seg;
+    vaddr_t pageallign_va;
 
     // todo
-   	faultaddress &= PAGE_FRAME;
+   	pageallign_va = faultaddress & PAGE_FRAME;
 
 
     switch (faulttype) {
@@ -91,20 +94,41 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 		return EFAULT;
 	}
 
+    new_page = -1;
+    seg = as_get_segment(as, faultaddress);
+    if (seg == NULL)
+    {
+        return EFAULT;
+    }
+    // segment found
+
     // look into the pagetable
     pa = pt_get_pa(as->pt, faultaddress);
 
     // if not exists then allocate a new frame
     if(pa == PFN_NOT_USED) {
         // asks for a new frame from the coremap
-        pa = page_alloc(faultaddress);
+        pa = page_alloc(pageallign_va);
         // update the pagetable with the new PFN 
         KASSERT((pa & PAGE_FRAME) == pa);
         pt_set_pa(as->pt, faultaddress, pa);
-    }
-    // otherwise update the TLB
-    
 
+        if (seg->p_permission == PF_S)
+        {
+            zero(PADDR_TO_KVADDR(pa), PAGE_SIZE);
+        }
+
+        new_page = 1;
+    }
+
+    if(new_page == 1 && seg->p_permission != PF_S) {
+        result = seg_load_page(seg, faultaddress, pa); 
+        if (result)
+            return EFAULT;
+    }    
+
+
+    // otherwise update the TLB
     spl = splhigh();
 
 
@@ -116,7 +140,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
             if (elo & TLBLO_VALID) {
                 continue;
             }
-            ehi = faultaddress;
+            ehi = pageallign_va;
             elo = pa | TLBLO_DIRTY | TLBLO_VALID;
             DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, pa);
             tlb_write(ehi, elo, i);

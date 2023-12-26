@@ -191,7 +191,7 @@ typedef struct {
 #define	PF_R		0x4	/* Segment is readable */
 #define	PF_W		0x2	/* Segment is writable */
 #define	PF_X		0x1	/* Segment is executable */
-
+#define PF_S        0x8 /* Segment is stack */
 
 typedef Elf32_Ehdr Elf_Ehdr;
 typedef Elf32_Phdr Elf_Phdr;
