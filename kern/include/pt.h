@@ -18,6 +18,7 @@
 struct pt_inner_entry {
     unsigned int valid;
     paddr_t pfn;
+    unsigned int swapped_out; 
 };
 struct pt_outer_entry {
     unsigned int valid;
