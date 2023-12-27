@@ -43,6 +43,10 @@ static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 
 static int coremapActive = 0; //flag for checking if coremap functionalities are available
 
+
+static unsigned int current_victim; //chosen victim in case corememory is full
+
+
 static int isMapActive () {
   int active;
   spinlock_acquire(&freemem_lock);
@@ -199,6 +203,7 @@ static paddr_t getppages(unsigned long npages) {
 static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
     int found = 0, pos;
     int i;
+    unsigned int victim;
     paddr_t pa;
 
     // looks for a previously freed page using a linear search
@@ -220,10 +225,20 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
         pa = ram_stealmem(1);
         spinlock_release(&stealmem_lock);
 
-        // here the kernel will crash when there is no more memory to steal
-        KASSERT(pa != 0);
+        
+       
+        //if no physical memory is found we need to choose a victim entry by round robin
+        if(pa == 0)
+        {
+            victim = current_victim;
+            current_victim = (current_victim + 1) %  nRamFrames;
+            pos = victim 
+        }
+        else
+        { 
+            pos = pa / PAGE_SIZE;
+        }
 
-        pos = pa / PAGE_SIZE;
 
     }
 
@@ -243,13 +258,14 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
 paddr_t page_alloc(vaddr_t vaddr) {
     paddr_t pa;
     struct addrspace *as_curr;
-
+    
     if(!isMapActive()) return 0;
     vm_can_sleep();
 
     as_curr = proc_getas();
     KASSERT(as_curr != NULL);
 
+    //getppage_user we need to check for victim in case no physical address is available
     pa = getppage_user(vaddr, as_curr);
     return pa;
 }
@@ -273,6 +289,8 @@ void page_free(paddr_t addr) {
     coremap[pos].alloc_size = 0;
     coremap[pos].vaddr = 0;
     spinlock_release(&freemem_lock);
+
+    ///check if dirty swap_out()
 }
 
 /**
@@ -298,6 +316,8 @@ void free_kpages(vaddr_t addr) {
     long first = paddr/PAGE_SIZE;	
     KASSERT(nRamFrames>first);
     freeppages(paddr, coremap[first].alloc_size);	
+
+
   }
 }
 
