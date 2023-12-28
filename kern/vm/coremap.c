@@ -12,6 +12,7 @@
 
 #include <coremap.h>
 #include <vmc1.h>
+#include <swapfile.h>
 
 /**
  * Lower layer of the whole system, here we manage all the physical pages keeping track of which as they refer to
@@ -76,7 +77,8 @@ void coremap_init() {
         coremap[i].status = clean; 
         coremap[i].as = NULL;
         coremap[i].alloc_size = 0;
-        coremap[i].vaddr = 0;
+        coremap[i].vaddr = 0; 
+        //the physical address  = i * PAGE_SIZE
     }
 
     // let it be usable
@@ -95,7 +97,7 @@ void coremap_shutdown() {
     coremapActive = 0;
     // release each page
     for(i = 0; i < nRamFrames; i++) {
-        page_free(i*PAGE_SIZE);
+        page_free(i*PAGE_SIZE); 
     }
     // release the handler
     kfree(coremap);
@@ -137,7 +139,7 @@ static paddr_t getfreeppages(unsigned long npages) {
 
     spinlock_release(&freemem_lock);
 
-    return addr;
+    return addr; //Returns a free physical address
 }
 
 /**
@@ -205,6 +207,10 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
     int i;
     unsigned int victim;
     paddr_t pa;
+    vaddr_t victim_va;
+    paddr_t victim_pa;
+    int result_swap_out;
+    
 
     // looks for a previously freed page using a linear search
     spinlock_acquire(&freemem_lock);
@@ -232,7 +238,24 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
         {
             victim = current_victim;
             current_victim = (current_victim + 1) %  nRamFrames;
-            pos = victim 
+            pos = victim;
+
+            //here we should add the call to swap out
+            victim_pa = pos * PAGE_SIZE;
+
+            victim_va = coremap[pos].vaddr;
+
+            result_swap_out = swap_out(victim_pa);
+            KASSERT(result_swap_out == 0);
+
+            pt_set_state(as->pt, victim_va, 1);
+
+
+
+            pa = victim_pa;
+            
+
+
         }
         else
         { 

@@ -13,14 +13,14 @@
 #include <elf.h>
 #include <coremap.h>
 #include <vmc1.h>
+#include <swapfile.h>
+
 
 static unsigned int current_victim;
 
 static unsigned int tlb_get_rr_victim(void) {
     unsigned int victim;
     victim = current_victim;
-
-    
     current_victim = (current_victim + 1) % NUM_TLB;
     return victim;
 }
@@ -51,6 +51,7 @@ void vm_can_sleep(void)
     }
 }
 
+
 int vm_fault(int faulttype, vaddr_t faultaddress)
 {
     int i, spl, found, new_page, result;
@@ -60,8 +61,9 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
     paddr_t pa; 
     struct segment * seg;
     vaddr_t pageallign_va;
-
-    // todo
+    unsigned int swapped_out;
+    int result_swap_in;
+    
    	pageallign_va = faultaddress & PAGE_FRAME;
 
 
@@ -71,6 +73,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
             return EACCES;
         case VM_FAULT_READ:
         case VM_FAULT_WRITE:
+            //call a function to set the dirty flag for this vadd to 1 
             break;
         default:
             return EINVAL;
@@ -104,21 +107,40 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 
     // look into the pagetable
     pa = pt_get_pa(as->pt, faultaddress);
+    swapped_out = pt_get_state(as->pt, faultaddress);
 
     // if not exists then allocate a new frame
-    if(pa == PFN_NOT_USED) {
+    if(pa == PFN_NOT_USED) { 
+        //the page was not used before
         // asks for a new frame from the coremap
         pa = page_alloc(pageallign_va);
         // update the pagetable with the new PFN 
         KASSERT((pa & PAGE_FRAME) == pa);
         pt_set_pa(as->pt, faultaddress, pa);
 
-        if (seg->p_permission == PF_S)
-        {
-            zero(PADDR_TO_KVADDR(pa), PAGE_SIZE);
+        if (seg->p_permission == PF_S) //if the fault is in the stack segment we need to zero-out the page
+        {   
+
+            //In C, uninitialized variables are not guaranteed to be set to any particular value. 
+            //Therefore, if a new page is not zeroed-out before it is used, it may contain arbitrary 
+            //data that could cause the program to behave unpredictably. By zeroing-out the new page, 
+            //we ensure that it is initialized to a known state of all zeroes 1
+            bzero((void *)PADDR_TO_KVADDR(pa), PAGE_SIZE);
         }
 
         new_page = 1;
+    }
+    else if(swapped_out){
+
+        //here we check if the page has been swapped out from the RAM so we will load it from the SWAPFILE
+        //call swap_in
+        pa = page_alloc(pageallign_va);
+       
+        
+        result_swap_in = swap_in(pa, pageallign_va);
+        KASSERT(result_swap_in == 0);
+        pt_set_state(as->pt, pageallign_va, 0);
+
     }
 
     if(new_page == 1 && seg->p_permission != PF_S) {
@@ -131,25 +153,28 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
     // otherwise update the TLB
     spl = splhigh();
 
-
+    //TLB probe: look for an entry matching the virtual page  , returns negative number if no matching was found
     found = tlb_probe(faultaddress, 0);
     if(found < 0) {
-        // not found
+        //if not found
+        //we check the entries of the TLB
+        //When the valid bit of an entry is set to 0 this will be our victim page
         for (i=0; i<NUM_TLB; i++) {
             tlb_read(&ehi, &elo, i);
             if (elo & TLBLO_VALID) {
                 continue;
             }
             ehi = pageallign_va;
-            elo = pa | TLBLO_DIRTY | TLBLO_VALID;
+            elo = pa | TLBLO_DIRTY | TLBLO_VALID; //pa is chosen with page_alloc : coremap.c
             DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, pa);
             tlb_write(ehi, elo, i);
             splx(spl);
             return 0;
         }
-        // choose a victim
 
-        ehi = faultaddress;
+        // choose a victim
+        //the new virtual address will be assigned the physical address of the victim
+        ehi = pageallign_va;
         elo = pa | TLBLO_DIRTY | TLBLO_VALID;
         victim = tlb_get_rr_victim();
         tlb_write(ehi, elo, victim);
