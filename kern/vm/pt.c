@@ -147,6 +147,68 @@ paddr_t pt_get_pa(struct pt_directory* pt, vaddr_t va) {
     return pa;
 }
 
+
+
+//check if the page has been swapped out
+
+
+unsigned int pt_get_state(struct pt_directory* pt, vaddr_t va) {
+    unsigned int p1, p2, d;
+
+    unsigned int flag;
+
+    p1 = get_p1(va);
+    KASSERT(p1 < SIZE_PT_OUTER);
+
+    p2 = get_p2(va);
+    KASSERT(p2 < SIZE_PT_INNER);
+
+    d = get_d(va);
+    KASSERT(d < PAGE_SIZE);
+
+    if(pt->pages[p1].valid) {
+        if(pt->pages[p1].pages[p2].valid) {
+            flag = pt->pages[p1].pages[p2].swapped_out;
+        }
+        else {
+            return 2;
+        }
+    } else {
+        return 2;
+    }
+
+    return flag;
+}
+
+
+void pt_set_state(struct pt_directory* pt, vaddr_t va, unsigned int state) {
+    unsigned int p1, p2, d;
+
+    p1 = get_p1(va);
+    KASSERT(p1 < SIZE_PT_OUTER);
+
+    p2 = get_p2(va);
+    KASSERT(p2 < SIZE_PT_INNER);
+
+    d = get_d(va);
+    KASSERT(d < PAGE_SIZE);
+
+    // if(!pt->pages[p1].valid) {
+    //     pt_define_inner(pt, va);
+    // }
+
+    // should be valid even after creation
+    KASSERT(pt->pages[p1].valid == 1);
+    pt->pages[p1].pages[p2].valid = 1;
+    pt->pages[p1].pages[p2].swapped_out = state;
+    
+}
+
+
+
+
+
+
 /**
  * This function is going to set a physical address (PFN) into 
  * the pagetable using the given virtual address as the one above

@@ -64,6 +64,20 @@ void pt_destroy_inner(struct pt_outer_entry pt_inner);
 paddr_t pt_get_pa(struct pt_directory* pt, vaddr_t va);
 
 /*
+    Get the swapped out flag  having a virtual address, 2 if it is not valid
+*/
+
+unsigned int pt_get_state(struct pt_directory* pt, vaddr_t va);
+
+
+/*
+    Set the state having a virtual address 
+*/
+
+void pt_set_state(struct pt_directory* pt, vaddr_t va, unsigned int state);
+
+
+/*
     Set the physical address having a virtual address, new inner table allocation is managed
 */
 void pt_set_pa(struct pt_directory* pt, vaddr_t va, paddr_t pa);
