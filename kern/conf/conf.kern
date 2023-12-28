@@ -481,3 +481,4 @@ optfile os161vm vm/addrspace.c
 optfile os161vm vm/segments.c
 optfile os161vm vm/pt.c
 optfile os161vm vm/vmc1.c
+optfile os161vm vm/swapfile.c 
