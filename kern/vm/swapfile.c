@@ -7,6 +7,8 @@
 #include <bitmap.h>
 #include <swapfile.h>
 
+
+
 // we need a bitmap to keep track of which chunks are full and which are empty in the swapfile
 //static struct bitmap *map;
 //instead we created a list of entries
@@ -29,7 +31,16 @@ static struct vnode *v = NULL; // The vnode for the swapfile
 void swapfile_init(void)
 {
     int result;
+    int i;
+    for(i=0; i<NUM_PAGES; i++)
+    {
+        swap_list[i].ppadd = 0;
+        swap_list[i].pvadd = 0;
+        swap_list[i].swap_offset = 0;
+        swap_list[i].free = 1;
 
+
+    }
     //if does not exist it will be created
     //The swap file is where all the pages will be written
     //when at run time more than 9MB is needed => panic is called
@@ -48,7 +59,7 @@ int swap_out(paddr_t ppaddr){
     int free_index = -1;
     
     struct iovec iov;
-    struct uiov u;
+    struct uio u;
     int i;
     struct swap_page *entry;
     off_t page_offset;
@@ -94,13 +105,12 @@ int swap_out(paddr_t ppaddr){
 
 int swap_in(paddr_t ppadd, vaddr_t pvadd){
 
-    unsigned int swap_index;
     struct iovec iov;
     struct uio u;
     int i;
     int page_index;
     off_t new_offset;
-
+    int result;
 
     page_index = -1;
     for (i=0; i< NUM_PAGES; i++)
@@ -117,18 +127,22 @@ int swap_in(paddr_t ppadd, vaddr_t pvadd){
 
     spinlock_acquire(&filelock);
     //fix the swap file descriptor
-    swap_list[page_index].ppadd =  NULL;
-    swap_list[page_index].vadd  = NULL;
+    swap_list[page_index].ppadd =  0;
+    swap_list[page_index].pvadd  = 0;
     swap_list[page_index].free  = 1;
+    swap_list[page_index].swap_offset = 0;
     //now copy in its new ppadd
 
     uio_kinit(&iov, &u, (void *) PADDR_TO_KVADDR(ppadd), PAGE_SIZE, new_offset, UIO_READ);
-    VOP(v, &u);
-    KASSERT(u.uio_resid ! = 0);
+    result = VOP_READ(v, &u);
+    KASSERT(result==0);
+
+    KASSERT(u.uio_resid != 0);
 
     spinlock_release(&filelock);
-
+    
     return 0;
+    
 }
 
 
