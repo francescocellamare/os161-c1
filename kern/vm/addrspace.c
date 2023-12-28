@@ -123,7 +123,7 @@ as_destroy(struct addrspace *as)
 	seg_destroy(as->data);
 	seg_destroy(as->stack);
 	vfs_close(v);
-
+	swap_shutdown();
 	kfree(as);
 }
 
