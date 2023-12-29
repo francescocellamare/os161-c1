@@ -30,12 +30,15 @@ static unsigned int tlb_get_rr_victim(void) {
  */
 void vm_bootstrap(void)
 {
+
     coremap_init();
     current_victim = 0;
+	swapfile_init();
 }
 
 void vm_shutdown(void)
 {
+	swap_shutdown();
     coremap_shutdown();
 }
 
@@ -54,7 +57,7 @@ void vm_can_sleep(void)
 
 int vm_fault(int faulttype, vaddr_t faultaddress)
 {
-    int i, spl, found, new_page, result;
+    int spl, new_page, result; //i, found;
     unsigned int victim;
 	uint32_t ehi, elo;
 	struct addrspace *as;
@@ -153,40 +156,47 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
     // otherwise update the TLB
     spl = splhigh();
 
-    //TLB probe: look for an entry matching the virtual page  , returns negative number if no matching was found
-    found = tlb_probe(faultaddress, 0);
-    if(found < 0) {
-        //if not found
-        //we check the entries of the TLB
-        //When the valid bit of an entry is set to 0 this will be our victim page
-        for (i=0; i<NUM_TLB; i++) {
-            tlb_read(&ehi, &elo, i);
-            if (elo & TLBLO_VALID) {
-                continue;
-            }
-            ehi = pageallign_va;
-            elo = pa | TLBLO_DIRTY | TLBLO_VALID; //pa is chosen with page_alloc : coremap.c
-            DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, pa);
-            tlb_write(ehi, elo, i);
-            splx(spl);
-            return 0;
-        }
 
-        // choose a victim
-        //the new virtual address will be assigned the physical address of the victim
-        ehi = pageallign_va;
-        elo = pa | TLBLO_DIRTY | TLBLO_VALID;
-        victim = tlb_get_rr_victim();
-        tlb_write(ehi, elo, victim);
-        return 0;
+    // TODO review of the tlb function
+    // found = tlb_probe(faultaddress, 0);
+    // if(found < 0) {
+    //     // not found
+    //     for (i=0; i<NUM_TLB; i++) {
+    //         tlb_read(&ehi, &elo, i);
+    //         if (elo & TLBLO_VALID) {
+    //             continue;
+    //         }
+    //         ehi = pageallign_va;
+    //         elo = pa | TLBLO_DIRTY | TLBLO_VALID;
+    //         DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, pa);
+    //         tlb_write(ehi, elo, i);
+    //         splx(spl);
+    //         return 0;
+    //     }
+    //     // choose a victim
+
+    //     ehi = faultaddress;
+    //     elo = pa | TLBLO_DIRTY | TLBLO_VALID;
+    //     victim = tlb_get_rr_victim();
+    //     tlb_write(ehi, elo, victim);
+    //     return 0;
+    // }
+
+    victim = tlb_get_rr_victim();
+
+    ehi = pageallign_va;
+    elo = pa | TLBLO_VALID;
+
+    if (seg->p_permission == (PF_R | PF_W) || seg->p_permission == PF_S)
+    {
+        elo = elo | TLBLO_DIRTY;
     }
-    // else found ==> duplication so not needed
 
+    tlb_write(ehi, elo, victim);
 
-    kprintf("dumbvm: Ran out of TLB entries - cannot handle page fault\n");
 	splx(spl);
 
-	return EFAULT;
+	return 0;
 }
 
 //TODO - Just a copy of the dumbvm one till now

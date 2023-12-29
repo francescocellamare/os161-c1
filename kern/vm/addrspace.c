@@ -76,7 +76,6 @@ as_create(void)
 	as->data = seg_create();
 	as->stack = seg_create();
 	as->pt = pt_create();
-	swapfile_init();
 
 	return as;
 }
@@ -95,17 +94,13 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		return ENOMEM;
 	}
 
-	newas->code = old->code;
-	newas->data = old->data;
-	newas->stack = old->stack;
-	newas->pt = old->pt;
-
 	result = seg_copy(old->code, &newas->code);
 	KASSERT(result == 0);
 	result = seg_copy(old->data, &newas->data);
 	KASSERT(result == 0);
 	result = seg_copy(old->stack, &newas->stack);
 	KASSERT(result == 0);
+	newas->pt = old->pt;
 
 	*ret = newas;
 	return 0;
@@ -123,7 +118,6 @@ as_destroy(struct addrspace *as)
 	seg_destroy(as->data);
 	seg_destroy(as->stack);
 	vfs_close(v);
-	swap_shutdown();
 	kfree(as);
 }
 
@@ -252,13 +246,14 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	/* Initial user-level stack pointer */
 	*stackptr = USERSTACK;
 
+	(void)as;
+
 	return 0;
 }
 
 struct segment* as_get_segment(struct addrspace *as, vaddr_t va) {
 	
 	KASSERT(as != NULL);
-	KASSERT(va > 0);
 
 	uint32_t base_seg1, top_seg1;
 	uint32_t base_seg2, top_seg2;
@@ -271,7 +266,7 @@ struct segment* as_get_segment(struct addrspace *as, vaddr_t va) {
 	top_seg2 = ( as->data->p_vaddr + as->data->p_memsz);
 
 	base_seg3 = as->stack->p_vaddr;
-	top_seg3 = ( as->stack->p_vaddr + as->stack->p_memsz);
+	top_seg3 = USERSTACK;
 
 	if(va >= base_seg1 && va <= top_seg1) {
 		return as->code;
@@ -284,4 +279,3 @@ struct segment* as_get_segment(struct addrspace *as, vaddr_t va) {
 	}
 	return NULL;
 }
-
