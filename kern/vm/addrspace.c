@@ -117,6 +117,7 @@ as_destroy(struct addrspace *as)
 	seg_destroy(as->code);
 	seg_destroy(as->data);
 	seg_destroy(as->stack);
+	pt_destroy(as->pt);
 	vfs_close(v);
 	kfree(as);
 }
