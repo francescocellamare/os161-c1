@@ -44,7 +44,7 @@ void swapfile_init(void)
     //if does not exist it will be created
     //The swap file is where all the pages will be written
     //when at run time more than 9MB is needed => panic is called
-    result = vfs_open((char *)"./SWAPFILE", O_RDWR | O_CREAT , 777, &v);
+    result = vfs_open((char *)"emu0:/SWAPFILE", O_RDWR | O_CREAT, 0,  &v);
     KASSERT(result == 0);
     return;
 
