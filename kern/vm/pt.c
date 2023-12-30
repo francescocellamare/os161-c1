@@ -11,6 +11,7 @@
 
 #include <pt.h>
 #include <vmc1.h>
+#include <coremap.h>
 
 /**
  * TLB structure is define into:
@@ -32,19 +33,6 @@ static int get_d(vaddr_t va) {
     return va & D_MASK;
 }
 
-/**
- * really, why did I write this?
-*/
-// static unsigned int get_npages(uint32_t memsize, vaddr_t va) {
-//     unsigned int npages;
-
-//     // segment's bytes + offset due to the va 
-//     npages = memsize + (va & ~PAGE_FRAME);
-//     // round the number of pages to the nearest integer (ie: 2 pages + x ==> 3, having x < PAGE_SIZE)
-//     npages = ( (npages + PAGE_SIZE - 1) & PAGE_FRAME ) / PAGE_SIZE;
-
-//     return npages;
-// }
 
 struct pt_directory* pt_create(void) {
     unsigned int i;
@@ -68,11 +56,16 @@ struct pt_directory* pt_create(void) {
 
 
 void pt_destroy_inner(struct pt_outer_entry pt_inner) {
-    
+
+    unsigned int i;    
     KASSERT(pt_inner.pages != NULL);
     KASSERT(pt_inner.size != 0);
     KASSERT(pt_inner.valid != 0);
 
+    for(i = 0; i < pt_inner.size; i++) {
+        if(pt_inner.pages[i].valid && pt_inner.pages[i].swapped_out != 1) 
+            page_free(pt_inner.pages[i].pfn);
+    }
     kfree(pt_inner.pages);
 }
 
