@@ -472,6 +472,14 @@ defoption old
 
 ########################################
 #                                      #
+#              DUMBVM                  #
+#                                      #
+########################################
+#defoption dumbvm
+#optfile dumbvm vm/addrspace.c
+
+########################################
+#                                      #
 #              New VM                  #
 #                                      #
 ########################################
@@ -482,3 +490,4 @@ optfile os161vm vm/segments.c
 optfile os161vm vm/pt.c
 optfile os161vm vm/vmc1.c
 optfile os161vm vm/swapfile.c 
+optfile os161vm vm/vm_tlb.c

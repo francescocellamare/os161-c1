@@ -57,7 +57,7 @@ void vm_can_sleep(void)
 
 int vm_fault(int faulttype, vaddr_t faultaddress)
 {
-    int spl, new_page, result; //i, found;
+    int spl, new_page, result, new_state = -1; //i, found;
     unsigned int victim;
 	uint32_t ehi, elo;
 	struct addrspace *as;
@@ -108,6 +108,11 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
     }
     // segment found
 
+    if (seg->p_permission == (PF_R | PF_W) || seg->p_permission == PF_S)
+    {
+        new_state = TLBLO_DIRTY;
+    }
+
     // look into the pagetable
     pa = pt_get_pa(as->pt, faultaddress);
     swapped_out = pt_get_state(as->pt, faultaddress);
@@ -116,7 +121,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
     if(pa == PFN_NOT_USED) { 
         //the page was not used before
         // asks for a new frame from the coremap
-        pa = page_alloc(pageallign_va);
+        pa = page_alloc(pageallign_va, new_state);
         // update the pagetable with the new PFN 
         KASSERT((pa & PAGE_FRAME) == pa);
         pt_set_pa(as->pt, faultaddress, pa);
@@ -137,7 +142,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 
         //here we check if the page has been swapped out from the RAM so we will load it from the SWAPFILE
         //call swap_in
-        pa = page_alloc(pageallign_va);
+        pa = page_alloc(pageallign_va, new_state);
        
         
         result_swap_in = swap_in(pa, pageallign_va);
