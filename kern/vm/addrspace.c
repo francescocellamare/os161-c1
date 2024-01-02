@@ -39,6 +39,9 @@
 #include <mips/tlb.h>
 
 #include <swapfile.h>
+#include <coremap.h>
+#include <vm_tlb.h>
+#include <vmc1.h>
 
 /*
  * Note! If OPT_DUMBVM is set, as is the case until you start the VM

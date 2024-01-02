@@ -13,6 +13,7 @@
 #include <coremap.h>
 #include <vmc1.h>
 #include <swapfile.h>
+#include <vm_tlb.h>
 
 /**
  * Lower layer of the whole system, here we manage all the physical pages keeping track of which as they refer to
@@ -202,8 +203,8 @@ static paddr_t getppages(unsigned long npages) {
  * Looks for a freed page if available otherwise a new frame is stolen by ram_stealmem. 
  * System is going to crash if there is no memory
 */
-static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
-    int found = 0, pos;
+static paddr_t getppage_user(vaddr_t va, struct addrspace *as, int state) {
+    volatile int found = 0, pos;
     int i;
     unsigned int victim;
     paddr_t pa;
@@ -217,6 +218,7 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
     for(i = 0; i < nRamFrames && !found; i++) {
         if(coremap[i].status == free) {
             found = 1;
+            break;
         }
     }
     spinlock_release(&freemem_lock);
@@ -251,8 +253,11 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
             pt_set_state(as->pt, victim_va, 1);
 
 
-
+            // KASSERT(state == state);
+            tlb_check_victim_pa(pa, va, state);
+            
             pa = victim_pa;
+            kprintf("SWAPPING line 276: (victim_pa: 0x%x victim_va: 0x%x)\n", victim_pa, victim_va);
             
 
 
@@ -278,7 +283,7 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
 /**
  * User side, wrapper of getppage_user
 */
-paddr_t page_alloc(vaddr_t vaddr) {
+paddr_t page_alloc(vaddr_t vaddr, int state) {
     paddr_t pa;
     struct addrspace *as_curr;
     
@@ -289,7 +294,7 @@ paddr_t page_alloc(vaddr_t vaddr) {
     KASSERT(as_curr != NULL);
 
     //getppage_user we need to check for victim in case no physical address is available
-    pa = getppage_user(vaddr, as_curr);
+    pa = getppage_user(vaddr, as_curr, state);
     return pa;
 }
 
