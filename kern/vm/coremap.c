@@ -13,6 +13,7 @@
 #include <coremap.h>
 #include <vmc1.h>
 #include <swapfile.h>
+#include <vm_tlb.h>
 
 /**
  * Lower layer of the whole system, here we manage all the physical pages keeping track of which as they refer to
@@ -54,6 +55,27 @@ static int isMapActive () {
   active = coremapActive;
   spinlock_release(&freemem_lock);
   return active;
+}
+
+static int tlb_get_rr_victim_not_fixed(int size) {
+    int victim = -1;
+    int len = 0;
+
+    KASSERT(size != 0);
+    while(len < size) {
+        // for having contiguous cells in kernel side
+        if(current_victim + (size-len) >= (unsigned int)nRamFrames)
+            current_victim = 0;
+
+        victim = current_victim;
+        current_victim = (current_victim + 1) % nRamFrames;
+
+        if(coremap[victim].status != fixed && coremap[victim].status != clean) {
+            len += 1; 
+        }
+        else len = 0;
+    }
+    return victim-(len-1);
 }
 
 /**
@@ -167,8 +189,14 @@ freeppages(paddr_t addr, unsigned long npages) {
  * Same behavior of dumbvm's getppages adapted to the coremap structure
 */
 static paddr_t getppages(unsigned long npages) {
-    unsigned long i;
+    unsigned long i, pos;
     paddr_t addr;
+    unsigned int victim;
+    volatile paddr_t victim_pa;
+    vaddr_t victim_va;
+    int result_swap_out;
+    struct addrspace* as;
+    int result;
 
     /* try freed pages first */
     addr = getfreeppages(npages);
@@ -179,7 +207,38 @@ static paddr_t getppages(unsigned long npages) {
         spinlock_acquire(&stealmem_lock);
         addr = ram_stealmem(npages);
         spinlock_release(&stealmem_lock);
-        KASSERT(addr != 0);
+
+        if(addr == 0) {
+            // kprintf("Kernel: ");
+            victim = tlb_get_rr_victim_not_fixed(npages);
+            as = proc_getas();
+            if (as == NULL) {
+                /*
+                * Kernel thread without an address space; leave the
+                * prior address space in place.
+                */
+                return 0;
+            }
+
+            for(i = 0; i < npages; i++) {
+                pos = victim + i;
+                //here we should add the call to swap out
+                victim_pa = pos * PAGE_SIZE;
+
+
+                victim_va = coremap[pos].vaddr;
+                result_swap_out = swap_out(victim_pa, victim_va);
+                // KASSERT(result_swap_out == 0);
+
+                pt_set_state(as->pt, victim_va, result_swap_out, 0);
+                // KASSERT(state == state);
+                result = tlb_remove_by_va(victim_va);
+                KASSERT(result != -1);
+            }
+            addr = victim * PAGE_SIZE;
+
+        }
+        // KASSERT(addr != 0);
     }
     // after stealing memory we MUST have p_addr different from zero (due to ASSERT otherwise system crashes)
     if (addr!=0 && isMapActive()) {
@@ -189,7 +248,7 @@ static paddr_t getppages(unsigned long npages) {
         coremap[addr/PAGE_SIZE].status = fixed;
 
         for(i = 1; i < npages; i++) {
-            KASSERT( coremap[(addr/PAGE_SIZE)+i].alloc_size == 0 );
+            // KASSERT( coremap[(addr/PAGE_SIZE)+i].alloc_size == 0 );
             coremap[(addr/PAGE_SIZE)+i].status = fixed;
             // alloc_size is still 0
         }
@@ -202,13 +261,13 @@ static paddr_t getppages(unsigned long npages) {
  * Looks for a freed page if available otherwise a new frame is stolen by ram_stealmem. 
  * System is going to crash if there is no memory
 */
-static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
-    int found = 0, pos;
+static paddr_t getppage_user(vaddr_t va, struct addrspace *as, int state) {
+    volatile int found = 0, pos;
     int i;
     unsigned int victim;
     paddr_t pa;
-    vaddr_t victim_va;
     paddr_t victim_pa;
+    vaddr_t victim_va;
     int result_swap_out;
     
 
@@ -217,6 +276,7 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
     for(i = 0; i < nRamFrames && !found; i++) {
         if(coremap[i].status == free) {
             found = 1;
+            break;
         }
     }
     spinlock_release(&freemem_lock);
@@ -236,26 +296,27 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
         //if no physical memory is found we need to choose a victim entry by round robin
         if(pa == 0)
         {
-            victim = current_victim;
-            current_victim = (current_victim + 1) %  nRamFrames;
-            pos = victim;
 
+            // kprintf("\n\nUser: ");
+            victim = tlb_get_rr_victim_not_fixed(1);
+            pos = victim;
             //here we should add the call to swap out
             victim_pa = pos * PAGE_SIZE;
 
             victim_va = coremap[pos].vaddr;
 
-            result_swap_out = swap_out(victim_pa);
-            KASSERT(result_swap_out == 0);
+            result_swap_out = swap_out(victim_pa, victim_va);
+            // KASSERT(result_swap_out == 0);
 
-            pt_set_state(as->pt, victim_va, 1);
+            pt_set_state(as->pt, victim_va, result_swap_out, 0);
 
-
-
-            pa = victim_pa;
+            KASSERT(state == state);
+            // tlb_check_victim_pa(pa, va, state);
             
+            pa = victim_pa;
+            // kprintf("SWAPPING line 276: (victim_pa: 0x%x victim_va: 0x%x)\n", victim_pa, victim_va);
 
-
+            pos = victim_pa / PAGE_SIZE;
         }
         else
         { 
@@ -278,7 +339,7 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
 /**
  * User side, wrapper of getppage_user
 */
-paddr_t page_alloc(vaddr_t vaddr) {
+paddr_t page_alloc(vaddr_t vaddr, int state) {
     paddr_t pa;
     struct addrspace *as_curr;
     
@@ -289,7 +350,7 @@ paddr_t page_alloc(vaddr_t vaddr) {
     KASSERT(as_curr != NULL);
 
     //getppage_user we need to check for victim in case no physical address is available
-    pa = getppage_user(vaddr, as_curr);
+    pa = getppage_user(vaddr, as_curr, state);
     return pa;
 }
 
@@ -304,7 +365,7 @@ void page_free(paddr_t addr) {
     pos = addr / PAGE_SIZE;
 
     KASSERT(coremap[pos].status != fixed);
-    KASSERT(coremap[pos].status != clean);
+    // KASSERT(coremap[pos].status != clean);
 
     spinlock_acquire(&freemem_lock);
     coremap[pos].status = free;

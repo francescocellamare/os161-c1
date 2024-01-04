@@ -26,7 +26,8 @@ static struct spinlock filelock = SPINLOCK_INITIALIZER;
 
 
 static struct vnode *v = NULL; // The vnode for the swapfile
-
+static int timesOut = 0;
+static int timesIn = 0;
 
 void swapfile_init(void)
 {
@@ -38,12 +39,11 @@ void swapfile_init(void)
         swap_list[i].pvadd = 0;
         swap_list[i].swap_offset = 0;
         swap_list[i].free = 1;
-
-
     }
     //if does not exist it will be created
     //The swap file is where all the pages will be written
     //when at run time more than 9MB is needed => panic is called
+    kprintf("SWAPFILE INIT\n");
     result = vfs_open((char *)"emu0:/SWAPFILE", O_RDWR | O_CREAT, 0,  &v);
     KASSERT(result == 0);
     return;
@@ -53,7 +53,7 @@ void swapfile_init(void)
 
 //first we need to perform the swap out
 //SWAP OUT: swap out of the Physical address the page and put it in the swap file
-int swap_out(paddr_t ppaddr){
+int swap_out(paddr_t ppaddr, vaddr_t pvaddr){
 //given the physical address of the page to be swapped out
 //we return the offset where we save it in the swap file 
     int free_index = -1;
@@ -63,6 +63,8 @@ int swap_out(paddr_t ppaddr){
     int i;
     struct swap_page *entry;
     off_t page_offset;
+
+
 
     spinlock_acquire(&filelock);
     for(i=0; i< NUM_PAGES; i++)
@@ -74,14 +76,20 @@ int swap_out(paddr_t ppaddr){
             break;
         }
     }
+    spinlock_release(&filelock);
+
     if(free_index == -1)
     {
+        kprintf("Total SWAPOUT: %d -- Total SWAPIN: %d\n", timesOut, timesIn);
         panic("swapfile.c : Out of swap space \n");
         return -1;
     }
 
+    // kprintf("SWAPOUT %d at pa:0x%x va:0x%x in position %d\n", timesOut, ppaddr, pvaddr, free_index);
+    timesOut++;
     page_offset = free_index * PAGE_SIZE;
     KASSERT(page_offset < FILE_SIZE);
+    KASSERT((ppaddr & PAGE_FRAME) == ppaddr);
 
     uio_kinit(&iov, &u, (void *) PADDR_TO_KVADDR(ppaddr), PAGE_SIZE, page_offset, UIO_WRITE);
     VOP_WRITE(v, &u);
@@ -91,7 +99,15 @@ int swap_out(paddr_t ppaddr){
         return -1;
     }
     else{
-        return 0;
+        // kprintf("Putting pa: 0x%x va: 0x%x at position %d\n", ppaddr, pvaddr, free_index);
+        spinlock_acquire(&filelock);
+        swap_list[free_index].free = 0;
+        swap_list[free_index].ppadd = ppaddr;
+        swap_list[free_index].pvadd = pvaddr;
+        swap_list[free_index].swap_offset = page_offset;
+        spinlock_release(&filelock);
+
+        return swap_list[free_index].swap_offset;
     }
 
 
@@ -103,28 +119,34 @@ int swap_out(paddr_t ppaddr){
 
 //the vadd given is the vadd of the 
 
-int swap_in(paddr_t ppadd, vaddr_t pvadd){
+int swap_in(paddr_t ppadd, vaddr_t pvadd, off_t offset){
 
     struct iovec iov;
     struct uio u;
-    int i;
+    // int i;
     int page_index;
-    off_t new_offset;
+    // off_t new_offset;
     int result;
 
-    page_index = -1;
-    for (i=0; i< NUM_PAGES; i++)
-    {
-        if(swap_list[i].pvadd == pvadd)
-        {
-            page_index = i;
-            break;
-        }
-    } 
+    // kprintf("SWAPIN %d at pa:0x%x va:0x%x in position %lld\n", timesIn, ppadd, pvadd, offset/PAGE_SIZE);
+    timesIn++;
 
-    KASSERT(page_index != -1);
-    new_offset =(off_t)(page_index * PAGE_SIZE); //how to transform int variable to offset
+    // page_index = -1;
+    // for (i=0; i< NUM_PAGES; i++)
+    // {
+    //     if(swap_list[i].pvadd == pvadd)
+    //     {
+    //         page_index = i;
+    //         kprintf("FOUND AT POS %d -- looking for va: 0x%x and found va 0x%x (in swapfile)\n", page_index, pvadd, swap_list[i].pvadd);
+    //         break;
+    //     }
+    // } 
 
+    // KASSERT(page_index != -1);
+    // new_offset =(off_t)(page_index * PAGE_SIZE);
+    KASSERT(offset >= 0);
+    KASSERT(pvadd == pvadd);
+    page_index = offset/PAGE_SIZE;
     spinlock_acquire(&filelock);
     //fix the swap file descriptor
     swap_list[page_index].ppadd =  0;
@@ -132,16 +154,20 @@ int swap_in(paddr_t ppadd, vaddr_t pvadd){
     swap_list[page_index].free  = 1;
     swap_list[page_index].swap_offset = 0;
     //now copy in its new ppadd
+    spinlock_release(&filelock);
 
-    uio_kinit(&iov, &u, (void *) PADDR_TO_KVADDR(ppadd), PAGE_SIZE, new_offset, UIO_READ);
+    uio_kinit(&iov, &u, (void *) PADDR_TO_KVADDR(ppadd), PAGE_SIZE, offset, UIO_READ);
     result = VOP_READ(v, &u);
     KASSERT(result==0);
 
-    KASSERT(u.uio_resid != 0);
-
-    spinlock_release(&filelock);
+    if(u.uio_resid != 0)
+    {
+        kprintf("Total SWAPOUT: %d -- Total SWAPIN: %d\n", timesOut, timesIn);
+        panic("swapfile.c: Cannot read from swap file");
+        return -1;
+    }
     
-    return 0;
+    return swap_list[page_index].swap_offset;
     
 }
 
@@ -150,4 +176,12 @@ void swap_shutdown(void)
 {
    vfs_close(v);
 
+}
+
+
+int getIn(void) {
+    return timesIn;
+}
+int getOut(void) {
+    return timesOut;
 }

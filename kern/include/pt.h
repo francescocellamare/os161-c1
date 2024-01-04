@@ -18,7 +18,7 @@
 struct pt_inner_entry {
     unsigned int valid;
     paddr_t pfn;
-    unsigned int swapped_out; 
+    off_t swapped_out; 
 };
 struct pt_outer_entry {
     unsigned int valid;
@@ -61,20 +61,20 @@ void pt_destroy_inner(struct pt_outer_entry pt_inner);
 /*
     Get the physical address having a virtual address, PFN_NOT_USED if it is not valid
 */
-paddr_t pt_get_pa(struct pt_directory* pt, vaddr_t va);
+int pt_get_pa(struct pt_directory* pt, vaddr_t va);
 
 /*
     Get the swapped out flag  having a virtual address, 2 if it is not valid
 */
 
-unsigned int pt_get_state(struct pt_directory* pt, vaddr_t va);
+off_t pt_get_state(struct pt_directory* pt, vaddr_t va);
 
 
 /*
     Set the state having a virtual address 
 */
 
-void pt_set_state(struct pt_directory* pt, vaddr_t va, unsigned int state);
+void pt_set_state(struct pt_directory* pt, vaddr_t va, off_t state, paddr_t pa);
 
 
 /*

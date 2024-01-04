@@ -57,15 +57,15 @@ void vm_can_sleep(void)
 
 int vm_fault(int faulttype, vaddr_t faultaddress)
 {
-    int spl, new_page, result; //i, found;
+    int spl, new_page, result, new_state = -1; //i, found;
     unsigned int victim;
 	uint32_t ehi, elo;
 	struct addrspace *as;
     paddr_t pa; 
     struct segment * seg;
     vaddr_t pageallign_va;
-    unsigned int swapped_out;
-    int result_swap_in;
+    off_t swapped_out;
+    off_t result_swap_in;
     
    	pageallign_va = faultaddress & PAGE_FRAME;
 
@@ -108,15 +108,20 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
     }
     // segment found
 
+    if (seg->p_permission == (PF_R | PF_W) || seg->p_permission == PF_S)
+    {
+        new_state = TLBLO_DIRTY;
+    }
+
     // look into the pagetable
     pa = pt_get_pa(as->pt, faultaddress);
     swapped_out = pt_get_state(as->pt, faultaddress);
-
+    
     // if not exists then allocate a new frame
-    if(pa == PFN_NOT_USED) { 
+    if(pa == PFN_NOT_USED && swapped_out == -1) { 
         //the page was not used before
         // asks for a new frame from the coremap
-        pa = page_alloc(pageallign_va);
+        pa = page_alloc(pageallign_va, new_state);
         // update the pagetable with the new PFN 
         KASSERT((pa & PAGE_FRAME) == pa);
         pt_set_pa(as->pt, faultaddress, pa);
@@ -133,20 +138,22 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 
         new_page = 1;
     }
-    else if(swapped_out){
+    else if(swapped_out >= 0){
 
         //here we check if the page has been swapped out from the RAM so we will load it from the SWAPFILE
         //call swap_in
-        pa = page_alloc(pageallign_va);
+        pa = page_alloc(pageallign_va, new_state);
        
         
-        result_swap_in = swap_in(pa, pageallign_va);
+        result_swap_in = swap_in(pa, pageallign_va, swapped_out);
         KASSERT(result_swap_in == 0);
-        pt_set_state(as->pt, pageallign_va, 0);
+        pt_set_state(as->pt, pageallign_va, -1, pa);
 
     }
 
     if(new_page == 1 && seg->p_permission != PF_S) {
+        // kprintf("LOAD at pa:0x%x va:0x%x\n", pa, pageallign_va);
+
         result = seg_load_page(seg, faultaddress, pa); 
         if (result)
             return EFAULT;
@@ -175,7 +182,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
     //     }
     //     // choose a victim
 
-    //     ehi = faultaddress;
+    //     ehi = pageallign_va;
     //     elo = pa | TLBLO_DIRTY | TLBLO_VALID;
     //     victim = tlb_get_rr_victim();
     //     tlb_write(ehi, elo, victim);

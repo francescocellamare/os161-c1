@@ -39,6 +39,9 @@
 #include <mips/tlb.h>
 
 #include <swapfile.h>
+#include <coremap.h>
+#include <vm_tlb.h>
+#include <vmc1.h>
 
 /*
  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
@@ -113,6 +116,7 @@ as_destroy(struct addrspace *as)
 
 	KASSERT(as != NULL);
 
+	kprintf("Total SWAPOUT: %d -- Total SWAPIN: %d\n", getOut(), getIn());
 	v = as->code->vnode;
 	seg_destroy(as->code);
 	seg_destroy(as->data);
@@ -159,11 +163,26 @@ as_activate(void)
 void
 as_deactivate(void)
 {
-	/*
-	 * Write this. For many designs it won't need to actually do
-	 * anything. See proc.c for an explanation of why it (might)
-	 * be needed.
-	 */
+	int i, spl;
+	struct addrspace *as;
+
+	as = proc_getas();
+	if (as == NULL) {
+		/*
+		 * Kernel thread without an address space; leave the
+		 * prior address space in place.
+		 */
+		return;
+	}
+
+	/* Disable interrupts on this CPU while frobbing the TLB. */
+	spl = splhigh();
+
+	for (i=0; i<NUM_TLB; i++) {
+		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+	}
+
+	splx(spl);
 }
 
 /*

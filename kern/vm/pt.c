@@ -98,7 +98,7 @@ void pt_define_inner(struct pt_directory* pt, vaddr_t va) {
     for(i = 0; i < pt->pages[index].size; i++) {
         pt->pages[index].pages[i].valid = 0;
         pt->pages[index].pages[i].pfn = PFN_NOT_USED;
-        pt->pages[index].pages[i].swapped_out = 0;
+        pt->pages[index].pages[i].swapped_out = -1;
     }
 }
 
@@ -112,7 +112,7 @@ void pt_define_inner(struct pt_directory* pt, vaddr_t va) {
  * 3. the outer page table (indexed by p1) doesn't contain a
  * valid entry, this should not occur in standard behavior
 */
-paddr_t pt_get_pa(struct pt_directory* pt, vaddr_t va) {
+int pt_get_pa(struct pt_directory* pt, vaddr_t va) {
     unsigned int p1, p2, d;
 
     paddr_t pa;
@@ -125,7 +125,7 @@ paddr_t pt_get_pa(struct pt_directory* pt, vaddr_t va) {
 
     d = get_d(va);
     KASSERT(d < PAGE_SIZE);
-
+// && !pt->pages[p1].pages[p2].swapped_out
     if(pt->pages[p1].valid) {
         if(pt->pages[p1].pages[p2].valid) {
             pa = pt->pages[p1].pages[p2].pfn;
@@ -145,10 +145,10 @@ paddr_t pt_get_pa(struct pt_directory* pt, vaddr_t va) {
 //check if the page has been swapped out
 
 
-unsigned int pt_get_state(struct pt_directory* pt, vaddr_t va) {
+off_t pt_get_state(struct pt_directory* pt, vaddr_t va) {
     unsigned int p1, p2, d;
 
-    unsigned int flag;
+    off_t flag;
 
     p1 = get_p1(va);
     KASSERT(p1 < SIZE_PT_OUTER);
@@ -164,18 +164,19 @@ unsigned int pt_get_state(struct pt_directory* pt, vaddr_t va) {
             flag = pt->pages[p1].pages[p2].swapped_out;
         }
         else {
-            return 2;
+            // useless case
+            return -1;
         }
     } else {
-        return 2;
+        return -1;
     }
 
     return flag;
 }
 
 
-void pt_set_state(struct pt_directory* pt, vaddr_t va, unsigned int state) {
-    unsigned int p1, p2, d;
+void pt_set_state(struct pt_directory* pt, vaddr_t va, off_t state, paddr_t pa) {
+    volatile unsigned int p1, p2, d;
 
     p1 = get_p1(va);
     KASSERT(p1 < SIZE_PT_OUTER);
@@ -186,14 +187,17 @@ void pt_set_state(struct pt_directory* pt, vaddr_t va, unsigned int state) {
     d = get_d(va);
     KASSERT(d < PAGE_SIZE);
 
-    // if(!pt->pages[p1].valid) {
-    //     pt_define_inner(pt, va);
-    // }
+    if(!pt->pages[p1].valid) {
+        pt_define_inner(pt, va);
+    }
 
     // should be valid even after creation
     KASSERT(pt->pages[p1].valid == 1);
     pt->pages[p1].pages[p2].valid = 1;
     pt->pages[p1].pages[p2].swapped_out = state;
+
+    // if state (so offset) is greater than 0 it means that the page has been swapped out
+    pt->pages[p1].pages[p2].pfn = pa;
     
 }
 
