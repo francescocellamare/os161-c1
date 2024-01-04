@@ -45,6 +45,7 @@
 #define VM_FAULT_READONLY    2    /* A write to a readonly page was attempted*/
 
 
+#if OPT_OLD
 /* Initialization function */
 void vm_bootstrap(void);
 
@@ -55,8 +56,8 @@ int vm_fault(int faulttype, vaddr_t faultaddress);
 vaddr_t alloc_kpages(unsigned npages);
 void free_kpages(vaddr_t addr);
 
+#endif
 /* TLB shootdown handling called from interprocessor_interrupt */
 void vm_tlbshootdown(const struct tlbshootdown *);
-
 
 #endif /* _VM_H_ */

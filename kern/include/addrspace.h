@@ -63,7 +63,7 @@ struct addrspace {
         struct segment* data;       
         struct segment* stack;
         struct pt_directory *pt;
-        
+
         // struct segment* heap;        /*no heap management for this assignment, I hope*/
 #endif
 };
@@ -123,13 +123,13 @@ int               as_define_region(struct addrspace *as,
                                    int writeable,
                                    int executable);
 #else
-int as_define_region(struct addrspace *as, uint32_t type, uint32_t offset ,vaddr_t vaddr, size_t memsize,
-		        uint32_t filesiz, int readable, int writeable, int executable, int segNo);
+int               as_define_region(struct addrspace *as, uint32_t type, uint32_t offset ,vaddr_t vaddr, size_t memsize,
+		        uint32_t filesiz, int readable, int writeable, int executable, int segNo, struct vnode *v);
 #endif
 int               as_prepare_load(struct addrspace *as);
 int               as_complete_load(struct addrspace *as);
 int               as_define_stack(struct addrspace *as, vaddr_t *initstackptr);
-
+struct segment*   as_get_segment(struct addrspace *as, vaddr_t va);
 
 /*
  * Functions in loadelf.c
@@ -139,6 +139,9 @@ int               as_define_stack(struct addrspace *as, vaddr_t *initstackptr);
  */
 
 int load_elf(struct vnode *v, vaddr_t *entrypoint);
-
+int load_segment(struct addrspace *as, struct vnode *v,
+	     off_t offset, vaddr_t vaddr,
+	     size_t memsize, size_t filesize,
+	     int is_executable);
 
 #endif /* _ADDRSPACE_H_ */

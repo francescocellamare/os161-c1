@@ -18,6 +18,7 @@
 struct pt_inner_entry {
     unsigned int valid;
     paddr_t pfn;
+    off_t swapped_out; 
 };
 struct pt_outer_entry {
     unsigned int valid;
@@ -45,7 +46,7 @@ struct pt_directory* pt_create(void);
 /*
     Static function which is called whenever a new inner pt is needed (so it becames valid)
 */
-static void pt_define_inner(struct pt_directory* pt);
+void pt_define_inner(struct pt_directory* pt, vaddr_t va);
 
 /*
     Free the whole structure
@@ -55,12 +56,26 @@ void pt_destroy(struct pt_directory* pt);
 /*
     Free the given inner table
 */
-static void pt_destroy_inner(struct pt_outer_entry pt_inner);
+void pt_destroy_inner(struct pt_outer_entry pt_inner);
 
 /*
     Get the physical address having a virtual address, PFN_NOT_USED if it is not valid
 */
-paddr_t pt_get_pa(struct pt_directory* pt, vaddr_t va);
+int pt_get_pa(struct pt_directory* pt, vaddr_t va);
+
+/*
+    Get the swapped out flag  having a virtual address, 2 if it is not valid
+*/
+
+off_t pt_get_state(struct pt_directory* pt, vaddr_t va);
+
+
+/*
+    Set the state having a virtual address 
+*/
+
+void pt_set_state(struct pt_directory* pt, vaddr_t va, off_t state, paddr_t pa);
+
 
 /*
     Set the physical address having a virtual address, new inner table allocation is managed

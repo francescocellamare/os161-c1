@@ -342,7 +342,7 @@ file      proc/proc.c
 
 file      vm/kmalloc.c
 
-optfile dumbvm   vm/addrspace.c
+#optfile dumbvm   vm/addrspace.c
 
 #
 # Network
@@ -387,24 +387,7 @@ file      syscall/time_syscalls.c
 file      main/main.c
 file      main/menu.c
 
-# lab1
-defoption hello
-optfile hello main/hello.c
 
-# lab3
-defoption synch
-
-# lab2
-defoption syscalls
-optfile syscalls syscall/proc_syscalls.c
-optfile syscalls syscall/file_syscalls.c
-
-# lab4
-defoption waitpid
-defoption fork
-
-# lab5
-defoption file
 ########################################
 #                                      #
 #             Filesystems              #
@@ -460,3 +443,51 @@ file		test/kmalloctest.c
 file		test/fstest.c
 optfile net	test/nettest.c
 
+########################################
+#                                      #
+#            Labs and utils            #
+#                                      #
+########################################
+# lab1
+defoption hello
+optfile hello main/hello.c
+
+# lab3
+defoption synch
+
+# lab2
+defoption syscalls
+optfile syscalls syscall/proc_syscalls.c
+optfile syscalls syscall/file_syscalls.c
+
+# lab4
+defoption waitpid
+defoption fork
+
+# lab5
+defoption file
+
+# old
+defoption old
+
+########################################
+#                                      #
+#              DUMBVM                  #
+#                                      #
+########################################
+#defoption dumbvm
+#optfile dumbvm vm/addrspace.c
+
+########################################
+#                                      #
+#              New VM                  #
+#                                      #
+########################################
+defoption os161vm
+optfile os161vm vm/coremap.c
+optfile os161vm vm/addrspace.c
+optfile os161vm vm/segments.c
+optfile os161vm vm/pt.c
+optfile os161vm vm/vmc1.c
+optfile os161vm vm/swapfile.c 
+optfile os161vm vm/vm_tlb.c

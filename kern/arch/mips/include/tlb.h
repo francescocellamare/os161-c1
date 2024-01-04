@@ -77,13 +77,6 @@ void tlb_write(uint32_t entryhi, uint32_t entrylo, uint32_t index);
 void tlb_read(uint32_t *entryhi, uint32_t *entrylo, uint32_t index);
 int tlb_probe(uint32_t entryhi, uint32_t entrylo);
 
-void tlb_init(void);
-void tlb_shutdown(void);
-
-/**
- * returns the index number of the page which is going to be evicted
-*/
-int tlb_get_rr_victim(void);
 
 /*
  * TLB entry fields.

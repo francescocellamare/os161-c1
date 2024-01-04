@@ -11,6 +11,7 @@
 
 #include <pt.h>
 #include <vmc1.h>
+#include <coremap.h>
 
 /**
  * TLB structure is define into:
@@ -21,33 +22,20 @@
  * 
 */
 static int get_p1(vaddr_t va) {
-    return va & P1_MASK;
+    return (va & P1_MASK) >> 22;
 }
 
 static int get_p2(vaddr_t va) {
-    return va & P2_MASK;
+    return (va & P2_MASK) >> 12;
 }
 
 static int get_d(vaddr_t va) {
     return va & D_MASK;
 }
 
-/**
- * really, why did I write this?
-*/
-static unsigned int get_npages(uint32_t memsize, vaddr_t va) {
-    unsigned int npages;
-
-    // segment's bytes + offset due to the va 
-    npages = memsize + (va & ~PAGE_FRAME);
-    // round the number of pages to the nearest integer (ie: 2 pages + x ==> 3, having x < PAGE_SIZE)
-    npages = ( (npages + PAGE_SIZE - 1) & PAGE_FRAME ) / PAGE_SIZE;
-
-    return npages;
-}
 
 struct pt_directory* pt_create(void) {
-    int i;
+    unsigned int i;
 
     struct pt_directory *pt;
 
@@ -59,7 +47,7 @@ struct pt_directory* pt_create(void) {
     KASSERT(pt->pages != NULL);
 
     for(i = 0; i < pt->size; i++) {
-        pt->pages[i] = NULL;
+        pt->pages[i].pages = NULL;
         pt->pages[i].valid = 0;
     }
 
@@ -67,18 +55,26 @@ struct pt_directory* pt_create(void) {
 }
 
 
-static pt_destroy_inner(struct pt_outer_entry pt_inner) {
-    
-    KASSERT(pt_inner != NULL);
+void pt_destroy_inner(struct pt_outer_entry pt_inner) {
+
+    unsigned int i;    
+    KASSERT(pt_inner.pages != NULL);
+    KASSERT(pt_inner.size != 0);
+    KASSERT(pt_inner.valid != 0);
+
+    for(i = 0; i < pt_inner.size; i++) {
+        if(pt_inner.pages[i].valid && pt_inner.pages[i].swapped_out != 1) 
+            page_free(pt_inner.pages[i].pfn);
+    }
     kfree(pt_inner.pages);
 }
 
 void pt_destroy(struct pt_directory* pt) {
-    int i;
+    unsigned int i;
 
     KASSERT(pt != NULL);
     for(i = 0; i < pt->size; i++) {
-        if(pt->pages[i] != NULL && pt->pages[i].valid) 
+        if(pt->pages[i].pages != NULL && pt->pages[i].valid) 
             pt_destroy_inner(pt->pages[i]); 
         
     }
@@ -87,8 +83,8 @@ void pt_destroy(struct pt_directory* pt) {
 
 }
 
-static void pt_define_inner(struct pt_directory* pt, vaddr_t va) {
-    int index, i;
+void pt_define_inner(struct pt_directory* pt, vaddr_t va) {
+    unsigned int index, i;
 
     index = get_p1(va);
 
@@ -96,11 +92,13 @@ static void pt_define_inner(struct pt_directory* pt, vaddr_t va) {
 
     pt->pages[index].size = SIZE_PT_INNER;
     pt->pages[index].pages = kmalloc(sizeof(struct pt_inner_entry)*SIZE_PT_INNER);
-    KASSERT(pt->pages[index] != NULL);
-
+    KASSERT(pt->pages[index].pages != NULL);
+    pt->pages[index].valid = 1;
+    
     for(i = 0; i < pt->pages[index].size; i++) {
         pt->pages[index].pages[i].valid = 0;
         pt->pages[index].pages[i].pfn = PFN_NOT_USED;
+        pt->pages[index].pages[i].swapped_out = -1;
     }
 }
 
@@ -114,20 +112,20 @@ static void pt_define_inner(struct pt_directory* pt, vaddr_t va) {
  * 3. the outer page table (indexed by p1) doesn't contain a
  * valid entry, this should not occur in standard behavior
 */
-paddr_t pt_get_pa(struct pt_directory* pt, vaddr_t va) {
+int pt_get_pa(struct pt_directory* pt, vaddr_t va) {
     unsigned int p1, p2, d;
 
     paddr_t pa;
 
     p1 = get_p1(va);
-    KASSERT(p1 >= 0 && p1 < SIZE_PT_OUTER);
+    KASSERT(p1 < SIZE_PT_OUTER);
 
     p2 = get_p2(va);
-    KASSERT(p2 >= 0 && p2 < SIZE_PT_INNER);
+    KASSERT(p2 < SIZE_PT_INNER);
 
     d = get_d(va);
-    KASSERT(d >= 0 && d < PAGE_SIZE);
-
+    KASSERT(d < PAGE_SIZE);
+// && !pt->pages[p1].pages[p2].swapped_out
     if(pt->pages[p1].valid) {
         if(pt->pages[p1].pages[p2].valid) {
             pa = pt->pages[p1].pages[p2].pfn;
@@ -142,6 +140,72 @@ paddr_t pt_get_pa(struct pt_directory* pt, vaddr_t va) {
     return pa;
 }
 
+
+
+//check if the page has been swapped out
+
+
+off_t pt_get_state(struct pt_directory* pt, vaddr_t va) {
+    unsigned int p1, p2, d;
+
+    off_t flag;
+
+    p1 = get_p1(va);
+    KASSERT(p1 < SIZE_PT_OUTER);
+
+    p2 = get_p2(va);
+    KASSERT(p2 < SIZE_PT_INNER);
+
+    d = get_d(va);
+    KASSERT(d < PAGE_SIZE);
+
+    if(pt->pages[p1].valid) {
+        if(pt->pages[p1].pages[p2].valid) {
+            flag = pt->pages[p1].pages[p2].swapped_out;
+        }
+        else {
+            // useless case
+            return -1;
+        }
+    } else {
+        return -1;
+    }
+
+    return flag;
+}
+
+
+void pt_set_state(struct pt_directory* pt, vaddr_t va, off_t state, paddr_t pa) {
+    volatile unsigned int p1, p2, d;
+
+    p1 = get_p1(va);
+    KASSERT(p1 < SIZE_PT_OUTER);
+
+    p2 = get_p2(va);
+    KASSERT(p2 < SIZE_PT_INNER);
+
+    d = get_d(va);
+    KASSERT(d < PAGE_SIZE);
+
+    if(!pt->pages[p1].valid) {
+        pt_define_inner(pt, va);
+    }
+
+    // should be valid even after creation
+    KASSERT(pt->pages[p1].valid == 1);
+    pt->pages[p1].pages[p2].valid = 1;
+    pt->pages[p1].pages[p2].swapped_out = state;
+
+    // if state (so offset) is greater than 0 it means that the page has been swapped out
+    pt->pages[p1].pages[p2].pfn = pa;
+    
+}
+
+
+
+
+
+
 /**
  * This function is going to set a physical address (PFN) into 
  * the pagetable using the given virtual address as the one above
@@ -152,20 +216,21 @@ void pt_set_pa(struct pt_directory* pt, vaddr_t va, paddr_t pa) {
     unsigned int p1, p2, d;
 
     p1 = get_p1(va);
-    KASSERT(p1 >= 0 && p1 < SIZE_PT_OUTER);
+    KASSERT(p1 < SIZE_PT_OUTER);
 
     p2 = get_p2(va);
-    KASSERT(p2 >= 0 && p2 < SIZE_PT_INNER);
+    KASSERT(p2 < SIZE_PT_INNER);
 
     d = get_d(va);
-    KASSERT(d >= 0 && d < PAGE_SIZE);
+    KASSERT(d < PAGE_SIZE);
 
     if(!pt->pages[p1].valid) {
         pt_define_inner(pt, va);
     }
 
     // should be valid even after creation
-    KASSERT(pt->pages[p1].valid);
+    KASSERT(pt->pages[p1].valid == 1);
     pt->pages[p1].pages[p2].valid = 1;
     pt->pages[p1].pages[p2].pfn = pa;
+    
 }

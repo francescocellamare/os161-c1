@@ -20,20 +20,21 @@ enum status_t {
  * vaddr in [0x80000000, 0x80000000+ram_size]
 */
 struct coremap_entry {
-    struct addrspace *as,
-    enum status_t status,
-    vaddr_t vaddr,
-    unsigned int alloc_size
+    struct addrspace *as;
+    enum status_t status;
+    vaddr_t vaddr;
+    unsigned int alloc_size;
 };
 
 void coremap_init(void);
 void coremap_shutdown(void);
 
 // for user
-paddr_t page_alloc(vaddr_t vaddr);
+paddr_t page_alloc(vaddr_t vaddr, int state);
 void page_free(paddr_t paddr);
 
 // for kernel
 vaddr_t alloc_kpages(unsigned long npages);
 void free_kpages(vaddr_t addr);
+
 #endif

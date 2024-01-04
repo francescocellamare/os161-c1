@@ -36,7 +36,13 @@
 #include <spl.h>
 #include <thread.h>
 #include <current.h>
+
+#if OPT_OLD
 #include <vm.h>
+#else
+#include <vmc1.h>
+#endif
+
 #include <mainbus.h>
 #include <syscall.h>
 

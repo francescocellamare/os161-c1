@@ -49,7 +49,6 @@
 #include <addrspace.h>
 #include <vnode.h>
 #include <syscall.h>
-
 #if OPT_WAITPID
 #include <synch.h>
 
@@ -263,6 +262,7 @@ proc_destroy(struct proc *proc)
 			as = proc->p_addrspace;
 			proc->p_addrspace = NULL;
 		}
+
 		as_destroy(as);
 	}
 

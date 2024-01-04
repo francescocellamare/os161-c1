@@ -30,11 +30,18 @@
 #include <types.h>
 #include <kern/errno.h>
 #include <lib.h>
+#include <spl.h>
 #include <addrspace.h>
 #include <vm.h>
 #include <proc.h>
 #include <elf.h>
-#include <tlb.h>
+#include <vfs.h>
+#include <mips/tlb.h>
+
+#include <swapfile.h>
+#include <coremap.h>
+#include <vm_tlb.h>
+#include <vmc1.h>
 
 /*
  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
@@ -83,16 +90,20 @@ int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
 	struct addrspace *newas;
+	int result;
 
 	newas = as_create();
 	if (newas==NULL) {
 		return ENOMEM;
 	}
 
-	newas->code = old->code;
-	newas->data = old->data;
-	newas->stack = old->stack;
-	newas->pt = old->pt
+	result = seg_copy(old->code, &newas->code);
+	KASSERT(result == 0);
+	result = seg_copy(old->data, &newas->data);
+	KASSERT(result == 0);
+	result = seg_copy(old->stack, &newas->stack);
+	KASSERT(result == 0);
+	newas->pt = old->pt;
 
 	*ret = newas;
 	return 0;
@@ -101,11 +112,17 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 void
 as_destroy(struct addrspace *as)
 {
+	struct vnode *v;
+
 	KASSERT(as != NULL);
+
+	kprintf("Total SWAPOUT: %d -- Total SWAPIN: %d\n", getOut(), getIn());
+	v = as->code->vnode;
 	seg_destroy(as->code);
 	seg_destroy(as->data);
 	seg_destroy(as->stack);
-
+	pt_destroy(as->pt);
+	vfs_close(v);
 	kfree(as);
 }
 
@@ -146,11 +163,26 @@ as_activate(void)
 void
 as_deactivate(void)
 {
-	/*
-	 * Write this. For many designs it won't need to actually do
-	 * anything. See proc.c for an explanation of why it (might)
-	 * be needed.
-	 */
+	int i, spl;
+	struct addrspace *as;
+
+	as = proc_getas();
+	if (as == NULL) {
+		/*
+		 * Kernel thread without an address space; leave the
+		 * prior address space in place.
+		 */
+		return;
+	}
+
+	/* Disable interrupts on this CPU while frobbing the TLB. */
+	spl = splhigh();
+
+	for (i=0; i<NUM_TLB; i++) {
+		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+	}
+
+	splx(spl);
 }
 
 /*
@@ -167,7 +199,7 @@ as_deactivate(void)
  */
 int
 as_define_region(struct addrspace *as, uint32_t type, uint32_t offset ,vaddr_t vaddr, size_t memsize,
-		 uint32_t filesz, int readable, int writeable, int executable, int segNo)
+		 uint32_t filesz, int readable, int writeable, int executable, int segNo, struct vnode *v)
 {
 	int res = 1;
 	int perm = 0x0;
@@ -182,9 +214,9 @@ as_define_region(struct addrspace *as, uint32_t type, uint32_t offset ,vaddr_t v
 		perm = perm | PF_X;
 
 	if(segNo == 0)
-		res = seg_define(as->code, type, offset, vaddr, filesz, memsize, perm);
+		res = seg_define(as->code, type, offset, vaddr, filesz, memsize, perm, v);
 	else if(segNo == 1)
-		res = seg_define(as->data, type, offset, vaddr, filesz, memsize, perm);
+		res = seg_define(as->data, type, offset, vaddr, filesz, memsize, perm, v);
 		
 	KASSERT(res == 0);	// segment defined correctly
 	return res;
@@ -213,10 +245,6 @@ as_prepare_load(struct addrspace *as)
 int
 as_complete_load(struct addrspace *as)
 {
-	/*
-	 * Write this.
-	 */
-
 	(void)as;
 	return 0;
 }
@@ -234,10 +262,40 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 
 	res = seg_define_stack(as->stack);
 
-	KASSERT(res == 0) 
+	KASSERT(res == 0); 
 	/* Initial user-level stack pointer */
 	*stackptr = USERSTACK;
+
+	(void)as;
 
 	return 0;
 }
 
+struct segment* as_get_segment(struct addrspace *as, vaddr_t va) {
+	
+	KASSERT(as != NULL);
+
+	uint32_t base_seg1, top_seg1;
+	uint32_t base_seg2, top_seg2;
+	uint32_t base_seg3, top_seg3;
+
+	base_seg1 = as->code->p_vaddr;
+	top_seg1 = ( as->code->p_vaddr + as->code->p_memsz);
+
+	base_seg2 = as->data->p_vaddr;
+	top_seg2 = ( as->data->p_vaddr + as->data->p_memsz);
+
+	base_seg3 = as->stack->p_vaddr;
+	top_seg3 = USERSTACK;
+
+	if(va >= base_seg1 && va <= top_seg1) {
+		return as->code;
+	}
+	else if(va >= base_seg2 && va <= top_seg2) {
+		return as->data;
+	}
+	else if (va >= base_seg3 && va <= top_seg3) {
+		return as->stack;
+	}
+	return NULL;
+}
