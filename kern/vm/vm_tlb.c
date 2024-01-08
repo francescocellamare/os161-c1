@@ -15,34 +15,6 @@
 #include <vm_tlb.h>
 
 
-int tlb_check_victim_pa(paddr_t pa_victim, vaddr_t new_va, int state) {
-    int i;
-	uint32_t ehi, elo;
-    int spl;
-    int updated = 0;
-    spl = splhigh();
-
-    kprintf("NEW: (%x -- %x)\n", new_va, pa_victim);
-    for(i = 0; i < NUM_TLB; i++) {
-        tlb_read(&ehi, &elo, i);
-        kprintf("READ %d: (%x -- %x)\n", i, (ehi & TLBHI_VPAGE)  >> 12, (elo & TLBLO_PPAGE));
-        if (elo & TLBLO_VALID) {
-            continue;
-        }
-        if((elo & TLBLO_PPAGE) == pa_victim) {
-
-            ehi = new_va;
-            elo = pa_victim | state | TLBLO_VALID;
-
-            tlb_write(ehi, elo, i);
-            updated = 1;
-        }
-    }
-
-    splx(spl);
-    return updated;
-}
-
 int tlb_remove_by_va(vaddr_t va) {
     int spl, index;
 	struct addrspace *as;

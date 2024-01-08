@@ -125,7 +125,6 @@ int pt_get_pa(struct pt_directory* pt, vaddr_t va) {
 
     d = get_d(va);
     KASSERT(d < PAGE_SIZE);
-// && !pt->pages[p1].pages[p2].swapped_out
     if(pt->pages[p1].valid) {
         if(pt->pages[p1].pages[p2].valid) {
             pa = pt->pages[p1].pages[p2].pfn;
@@ -164,7 +163,6 @@ off_t pt_get_state(struct pt_directory* pt, vaddr_t va) {
             flag = pt->pages[p1].pages[p2].swapped_out;
         }
         else {
-            // useless case
             return -1;
         }
     } else {
