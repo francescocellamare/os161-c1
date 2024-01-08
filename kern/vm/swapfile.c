@@ -9,9 +9,7 @@
 
 
 
-// we need a bitmap to keep track of which chunks are full and which are empty in the swapfile
-//static struct bitmap *map;
-//instead we created a list of entries
+//we created a list of entries
 static struct swap_page swap_list[NUM_PAGES];
 
 
@@ -145,7 +143,7 @@ int swap_in(paddr_t ppadd, vaddr_t pvadd, off_t offset){
     // KASSERT(page_index != -1);
     // new_offset =(off_t)(page_index * PAGE_SIZE);
     KASSERT(offset >= 0);
-    KASSERT(pvadd == pvadd);
+    
     page_index = offset/PAGE_SIZE;
     spinlock_acquire(&filelock);
     //fix the swap file descriptor
