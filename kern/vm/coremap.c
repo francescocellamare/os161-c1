@@ -57,7 +57,7 @@ static int isMapActive () {
   return active;
 }
 
-static int tlb_get_rr_victim_not_fixed(int size) {
+static int get_victim_coremap(int size) {
     int victim = -1;
     int len = 0;
 
@@ -75,8 +75,7 @@ static int tlb_get_rr_victim_not_fixed(int size) {
         }
         else len = 0;
     }
-    return victim-(len-1);
-}
+    return victim-(len-1); }
 
 /**
  * Allocates the empty coremap and enables it by setting coremapActive
@@ -167,8 +166,7 @@ static paddr_t getfreeppages(unsigned long npages) {
 /**
  * Same behavior of dumbvm's freeppages adapted to the coremap structure
 */
-static int 
-freeppages(paddr_t addr, unsigned long npages) {
+static int freeppages(paddr_t addr, unsigned long npages) {
   long i, first;	
 
   if (!isMapActive()) return 0; 
@@ -209,7 +207,10 @@ static paddr_t getppages(unsigned long npages) {
         spinlock_release(&stealmem_lock);
 
         if(addr == 0) {
-            victim = tlb_get_rr_victim_not_fixed(npages);
+
+            // kprintf("Kernel: ");
+            victim = get_victim_coremap(npages);
+
             as = proc_getas();
             if (as == NULL) {
                 /*
@@ -295,7 +296,7 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
         {
 
             // kprintf("\n\nUser: ");
-            victim = tlb_get_rr_victim_not_fixed(1);
+            victim = get_victim_coremap(1);
             pos = victim;
             //here we should add the call to swap out
             victim_pa = pos * PAGE_SIZE;

@@ -64,7 +64,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
     paddr_t pa; 
     struct segment * seg;
     vaddr_t pageallign_va;
-    off_t swapped_out;
+    off_t swap_offset;
     off_t result_swap_in;
     
    	pageallign_va = faultaddress & PAGE_FRAME;
@@ -115,10 +115,10 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 
     // look into the pagetable
     pa = pt_get_pa(as->pt, faultaddress);
-    swapped_out = pt_get_state(as->pt, faultaddress);
+    swap_offset = pt_get_state(as->pt, faultaddress);
     
     // if not exists then allocate a new frame
-    if(pa == PFN_NOT_USED && swapped_out == -1) { 
+    if(pa == PFN_NOT_USED && swap_offset == -1) { 
         //the page was not used before
         // asks for a new frame from the coremap
         pa = page_alloc(pageallign_va, new_state);
@@ -138,14 +138,14 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 
         new_page = 1;
     }
-    else if(swapped_out >= 0){
+    else if(swap_offset >= 0){
 
         //here we check if the page has been swapped out from the RAM so we will load it from the SWAPFILE
         //call swap_in
         pa = page_alloc(pageallign_va, new_state);
        
         
-        result_swap_in = swap_in(pa, pageallign_va, swapped_out);
+        result_swap_in = swap_in(pa, pageallign_va, swap_offset);
         KASSERT(result_swap_in == 0);
         pt_set_state(as->pt, pageallign_va, -1, pa);
 

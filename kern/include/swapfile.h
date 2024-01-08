@@ -8,12 +8,11 @@
 
 struct swap_page
 {
-    //First initialization of the swap page
+   
     paddr_t ppadd;
     vaddr_t pvadd; //This is used for the swap in
     off_t swap_offset;
     int free; //1: free 0:taken
-
 
 };
 
