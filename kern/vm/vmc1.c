@@ -33,12 +33,11 @@ void vm_bootstrap(void)
 
     coremap_init();
     current_victim = 0;
-	swapfile_init();
+
 }
 
 void vm_shutdown(void)
 {
-	swap_shutdown();
     coremap_shutdown();
 }
 

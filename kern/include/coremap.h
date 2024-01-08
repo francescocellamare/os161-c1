@@ -28,6 +28,8 @@ struct coremap_entry {
 
 void coremap_init(void);
 void coremap_shutdown(void);
+void coremap_turn_off(void);
+void coremap_turn_on(void);
 
 // for user
 paddr_t page_alloc(vaddr_t vaddr);

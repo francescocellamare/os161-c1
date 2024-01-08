@@ -83,6 +83,9 @@ static int get_victim_coremap(int size) {
 void coremap_init() {
     int i;
     int coremap_size = 0;
+    volatile int freeeeeee = 0, fixeddddd = 0, cleannnnn = 0, dirtyyyyy = 0;
+
+    if(!isMapActive()) {
     nRamFrames = ((int)ram_getsize())/PAGE_SIZE;  
     KASSERT(nRamFrames > 0);
 
@@ -106,6 +109,23 @@ void coremap_init() {
     spinlock_acquire(&freemem_lock);
     coremapActive = 1;
     spinlock_release(&freemem_lock);
+        
+    }
+    else {
+        
+        for(i = 0; i < nRamFrames; i++) {
+        if(coremap[i].status == free) freeeeeee++;
+        if(coremap[i].status == dirty) dirtyyyyy++;
+        if(coremap[i].status == fixed) fixeddddd++;
+        if(coremap[i].status == clean) cleannnnn++;
+    }
+
+    kprintf("FREEEEEEEE: %d\n", freeeeeee);
+    kprintf("FIXED: %d\n", fixeddddd);
+    kprintf("CLEAN: %d\n", cleannnnn);
+    kprintf("DIRTY: %d\n", dirtyyyyy);
+
+    }
 }
 
 /**
@@ -125,21 +145,44 @@ void coremap_shutdown() {
     spinlock_release(&freemem_lock);
 }
 
+void coremap_turn_off() {
+
+    spinlock_acquire(&freemem_lock);
+    coremapActive = 0;
+    spinlock_release(&freemem_lock);
+}
+
+void coremap_turn_on() {
+
+    spinlock_acquire(&freemem_lock);
+    coremapActive = 1;
+    spinlock_release(&freemem_lock);
+}
+
 
 /**
  * Same behavior of dumbvm's getfreeppages adapted to the coremap structure
 */
-static paddr_t getfreeppages(unsigned long npages) {
-    paddr_t addr;	
-    long i, first, found;
+static int getfreeppages(unsigned long npages) {
+    int addr;	
+    volatile long i, first, found;
+
 
     if (!isMapActive()) return 0; 
     spinlock_acquire(&freemem_lock);
-    for (i=0,first=found=-1; i<nRamFrames; i++) {
+    first = -1;
+    found = -1;
+    for (i=0; i<nRamFrames; i++) {
         if (coremap[i].status == free) {
-        if (i==0 || !coremap[i-1].status == free) 
-            first = i;
-        if (i-first+1 >= (long)npages) {
+        if (i==0 || !coremap[i-1].status == free) {
+            first = i; 
+            if(i == 0) {
+                first = -1;
+                continue;
+            }
+        }
+
+        if (i-first+1 >= (long)npages && first != -1) {
             found = first;
             break;
         }

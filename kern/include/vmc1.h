@@ -3,7 +3,7 @@
 
 #include <vm.h>
 
-#define VMC1_STACKPAGES 18
+#define VMC1_STACKPAGES 12
 
 void vm_bootstrap(void);
 void vm_can_sleep(void);

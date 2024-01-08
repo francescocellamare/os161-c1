@@ -50,6 +50,7 @@
 #include <addrspace.h>
 #include <mainbus.h>
 #include <vnode.h>
+#include <coremap.h>
 
 
 /* Magic number used as a guard value on kernel thread stacks. */
@@ -502,6 +503,7 @@ thread_fork(const char *name,
 		return ENOMEM;
 	}
 
+	coremap_init();
 	/* Allocate a stack */
 	newthread->t_stack = kmalloc(STACK_SIZE);
 	if (newthread->t_stack == NULL) {

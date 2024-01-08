@@ -172,8 +172,16 @@ int swap_in(paddr_t ppadd, off_t offset){
 
 void swap_shutdown(void)
 {
-   vfs_close(v);
+    int i;
+    vfs_close(v);
 
+    for(i=0; i<NUM_PAGES; i++)
+    {
+        swap_list[i].ppadd = 0;
+        swap_list[i].pvadd = 0;
+        swap_list[i].swap_offset = 0;
+        swap_list[i].free = 1;
+    }
 }
 
 

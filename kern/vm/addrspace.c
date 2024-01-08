@@ -68,7 +68,7 @@ struct addrspace *
 as_create(void)
 {
 	struct addrspace *as;
-
+	// coremap_turn_on();
 	as = kmalloc(sizeof(struct addrspace));
 	if (as == NULL) {
 		return NULL;
@@ -79,6 +79,7 @@ as_create(void)
 	as->data = seg_create();
 	as->stack = seg_create();
 	as->pt = pt_create();
+	swapfile_init();
 
 	return as;
 }
@@ -124,6 +125,8 @@ as_destroy(struct addrspace *as)
 	pt_destroy(as->pt);
 	vfs_close(v);
 	kfree(as);
+	swap_shutdown();
+	// coremap_turn_off();
 }
 
 /**
