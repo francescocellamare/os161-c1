@@ -67,14 +67,14 @@ int pt_get_pa(struct pt_directory* pt, vaddr_t va);
     Get the swapped out flag  having a virtual address, 2 if it is not valid
 */
 
-off_t pt_get_state(struct pt_directory* pt, vaddr_t va);
+off_t pt_get_offset(struct pt_directory* pt, vaddr_t va);
 
 
 /*
-    Set the state having a virtual address 
+    Set the offset having a virtual address 
 */
 
-void pt_set_state(struct pt_directory* pt, vaddr_t va, off_t state, paddr_t pa);
+void pt_set_offset(struct pt_directory* pt, vaddr_t va, off_t offset);
 
 
 /*

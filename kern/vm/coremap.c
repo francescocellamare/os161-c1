@@ -229,7 +229,8 @@ static paddr_t getppages(unsigned long npages) {
                 victim_va = coremap[pos].vaddr;
                 result_swap_out = swap_out(victim_pa, victim_va);
 
-                pt_set_state(as->pt, victim_va, result_swap_out, 0);
+                pt_set_offset(as->pt, victim_va, result_swap_out);
+                pt_set_pa(as->pt, victim_va, 0);
                 result = tlb_remove_by_va(victim_va);
                 KASSERT(result != -1);
             }
@@ -304,11 +305,9 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
             victim_va = coremap[pos].vaddr;
 
             result_swap_out = swap_out(victim_pa, victim_va);
-            // KASSERT(result_swap_out == 0);
 
-            pt_set_state(as->pt, victim_va, result_swap_out, 0);
-
-            // tlb_check_victim_pa(pa, va, state);
+            pt_set_offset(as->pt, victim_va, result_swap_out);
+            pt_set_pa(as->pt, victim_va, 0);
             
             pa = victim_pa;
             // kprintf("SWAPPING line 276: (victim_pa: 0x%x victim_va: 0x%x)\n", victim_pa, victim_va);

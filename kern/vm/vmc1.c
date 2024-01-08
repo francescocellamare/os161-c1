@@ -57,7 +57,7 @@ void vm_can_sleep(void)
 
 int vm_fault(int faulttype, vaddr_t faultaddress)
 {
-    int spl, new_page, result, new_state = -1; //i, found;
+    int spl, new_page, result; //i, found;
     unsigned int victim;
 	uint32_t ehi, elo;
 	struct addrspace *as;
@@ -108,20 +108,15 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
     }
     // segment found
 
-    if (seg->p_permission == (PF_R | PF_W) || seg->p_permission == PF_S)
-    {
-        new_state = TLBLO_DIRTY;
-    }
-
     // look into the pagetable
     pa = pt_get_pa(as->pt, faultaddress);
-    swap_offset = pt_get_state(as->pt, faultaddress);
+    swap_offset = pt_get_offset(as->pt, faultaddress);
     
     // if not exists then allocate a new frame
     if(pa == PFN_NOT_USED && swap_offset == -1) { 
         //the page was not used before
         // asks for a new frame from the coremap
-        pa = page_alloc(pageallign_va, new_state);
+        pa = page_alloc(pageallign_va);
         // update the pagetable with the new PFN 
         KASSERT((pa & PAGE_FRAME) == pa);
         pt_set_pa(as->pt, faultaddress, pa);
@@ -142,12 +137,13 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 
         //here we check if the page has been swapped out from the RAM so we will load it from the SWAPFILE
         //call swap_in
-        pa = page_alloc(pageallign_va, new_state);
+        pa = page_alloc(pageallign_va);
        
         
-        result_swap_in = swap_in(pa, pageallign_va, swap_offset);
+        result_swap_in = swap_in(pa, swap_offset);
         KASSERT(result_swap_in == 0);
-        pt_set_state(as->pt, pageallign_va, -1, pa);
+        pt_set_offset(as->pt, pageallign_va, -1);
+        pt_set_pa(as->pt, pageallign_va, pa);
 
     }
 
@@ -162,32 +158,6 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 
     // otherwise update the TLB
     spl = splhigh();
-
-
-    // TODO review of the tlb function
-    // found = tlb_probe(faultaddress, 0);
-    // if(found < 0) {
-    //     // not found
-    //     for (i=0; i<NUM_TLB; i++) {
-    //         tlb_read(&ehi, &elo, i);
-    //         if (elo & TLBLO_VALID) {
-    //             continue;
-    //         }
-    //         ehi = pageallign_va;
-    //         elo = pa | TLBLO_DIRTY | TLBLO_VALID;
-    //         DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, pa);
-    //         tlb_write(ehi, elo, i);
-    //         splx(spl);
-    //         return 0;
-    //     }
-    //     // choose a victim
-
-    //     ehi = pageallign_va;
-    //     elo = pa | TLBLO_DIRTY | TLBLO_VALID;
-    //     victim = tlb_get_rr_victim();
-    //     tlb_write(ehi, elo, victim);
-    //     return 0;
-    // }
 
     victim = tlb_get_rr_victim();
 

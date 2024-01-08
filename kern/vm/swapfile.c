@@ -117,7 +117,7 @@ int swap_out(paddr_t ppaddr, vaddr_t pvaddr){
 
 //the vadd given is the vadd of the 
 
-int swap_in(paddr_t ppadd, vaddr_t pvadd, off_t offset){
+int swap_in(paddr_t ppadd, off_t offset){
 
     struct iovec iov;
     struct uio u;

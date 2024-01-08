@@ -18,7 +18,7 @@ struct swap_page
 
 void swapfile_init(void);
 int swap_out(paddr_t ppaddr, vaddr_t pvaddr);
-int swap_in(paddr_t ppadd, vaddr_t pvadd, off_t offset);
+int swap_in(paddr_t ppadd, off_t offset);
 void swap_shutdown(void);
 int getIn(void);
 int getOut(void);

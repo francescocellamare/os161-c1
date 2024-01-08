@@ -144,7 +144,7 @@ int pt_get_pa(struct pt_directory* pt, vaddr_t va) {
 //check if the page has been swapped out
 
 
-off_t pt_get_state(struct pt_directory* pt, vaddr_t va) {
+off_t pt_get_offset(struct pt_directory* pt, vaddr_t va) {
     unsigned int p1, p2, d;
 
     off_t flag;
@@ -173,7 +173,7 @@ off_t pt_get_state(struct pt_directory* pt, vaddr_t va) {
 }
 
 
-void pt_set_state(struct pt_directory* pt, vaddr_t va, off_t state, paddr_t pa) {
+void pt_set_offset(struct pt_directory* pt, vaddr_t va, off_t offset) {
     volatile unsigned int p1, p2, d;
 
     p1 = get_p1(va);
@@ -192,10 +192,10 @@ void pt_set_state(struct pt_directory* pt, vaddr_t va, off_t state, paddr_t pa) 
     // should be valid even after creation
     KASSERT(pt->pages[p1].valid == 1);
     pt->pages[p1].pages[p2].valid = 1;
-    pt->pages[p1].pages[p2].swapped_out = state;
+    pt->pages[p1].pages[p2].swapped_out = offset;
 
-    // if state (so offset) is greater than 0 it means that the page has been swapped out
-    pt->pages[p1].pages[p2].pfn = pa;
+    // if offset is greater than 0 it means that the page has been swapped out
+    // pt->pages[p1].pages[p2].pfn = pa;
     
 }
 
