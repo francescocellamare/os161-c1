@@ -207,8 +207,10 @@ static paddr_t getppages(unsigned long npages) {
         spinlock_release(&stealmem_lock);
 
         if(addr == 0) {
+
             // kprintf("Kernel: ");
             victim = get_victim_coremap(npages);
+
             as = proc_getas();
             if (as == NULL) {
                 /*
@@ -226,10 +228,8 @@ static paddr_t getppages(unsigned long npages) {
 
                 victim_va = coremap[pos].vaddr;
                 result_swap_out = swap_out(victim_pa, victim_va);
-                // KASSERT(result_swap_out == 0);
 
                 pt_set_state(as->pt, victim_va, result_swap_out, 0);
-                // KASSERT(state == state);
                 result = tlb_remove_by_va(victim_va);
                 KASSERT(result != -1);
             }
@@ -259,7 +259,7 @@ static paddr_t getppages(unsigned long npages) {
  * Looks for a freed page if available otherwise a new frame is stolen by ram_stealmem. 
  * System is going to crash if there is no memory
 */
-static paddr_t getppage_user(vaddr_t va, struct addrspace *as, int state) {
+static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
     volatile int found = 0, pos;
     int i;
     unsigned int victim;
@@ -308,7 +308,6 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as, int state) {
 
             pt_set_state(as->pt, victim_va, result_swap_out, 0);
 
-            KASSERT(state == state);
             // tlb_check_victim_pa(pa, va, state);
             
             pa = victim_pa;
@@ -337,7 +336,7 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as, int state) {
 /**
  * User side, wrapper of getppage_user
 */
-paddr_t page_alloc(vaddr_t vaddr, int state) {
+paddr_t page_alloc(vaddr_t vaddr) {
     paddr_t pa;
     struct addrspace *as_curr;
     
@@ -348,7 +347,7 @@ paddr_t page_alloc(vaddr_t vaddr, int state) {
     KASSERT(as_curr != NULL);
 
     //getppage_user we need to check for victim in case no physical address is available
-    pa = getppage_user(vaddr, as_curr, state);
+    pa = getppage_user(vaddr, as_curr);
     return pa;
 }
 

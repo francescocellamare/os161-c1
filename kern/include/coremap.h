@@ -30,7 +30,7 @@ void coremap_init(void);
 void coremap_shutdown(void);
 
 // for user
-paddr_t page_alloc(vaddr_t vaddr, int state);
+paddr_t page_alloc(vaddr_t vaddr);
 void page_free(paddr_t paddr);
 
 // for kernel
