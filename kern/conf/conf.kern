@@ -468,7 +468,7 @@ defoption fork
 defoption file
 
 # old
-defoption old
+#defoption old
 
 ########################################
 #                                      #
@@ -476,7 +476,7 @@ defoption old
 #                                      #
 ########################################
 #defoption dumbvm
-#optfile dumbvm vm/addrspace.c
+optfile dumbvm vm/addrspace.c
 
 ########################################
 #                                      #
