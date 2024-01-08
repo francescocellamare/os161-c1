@@ -31,7 +31,7 @@ void coremap_shutdown(void);
 void coremap_turn_off(void);
 void coremap_turn_on(void);
 
-// for user
+// 
 paddr_t page_alloc(vaddr_t vaddr);
 void page_free(paddr_t paddr);
 

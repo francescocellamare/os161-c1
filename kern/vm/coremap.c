@@ -311,6 +311,7 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
     paddr_t victim_pa;
     vaddr_t victim_va;
     int result_swap_out;
+    int result;
     
 
     // looks for a previously freed page using a linear search
@@ -356,6 +357,7 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
             // kprintf("SWAPPING line 276: (victim_pa: 0x%x victim_va: 0x%x)\n", victim_pa, victim_va);
 
             pos = victim_pa / PAGE_SIZE;
+            result = tlb_remove_by_va(victim_va);
         }
         else
         { 

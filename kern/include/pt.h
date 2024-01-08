@@ -18,7 +18,7 @@
 struct pt_inner_entry {
     unsigned int valid;
     paddr_t pfn;
-    off_t swapped_out; 
+    off_t swap_offset; 
 };
 struct pt_outer_entry {
     unsigned int valid;

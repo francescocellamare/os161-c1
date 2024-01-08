@@ -63,7 +63,7 @@ void pt_destroy_inner(struct pt_outer_entry pt_inner) {
     KASSERT(pt_inner.valid != 0);
 
     for(i = 0; i < pt_inner.size; i++) {
-        if(pt_inner.pages[i].valid && pt_inner.pages[i].swapped_out != 1) 
+        if(pt_inner.pages[i].valid && pt_inner.pages[i].swap_offset != 1) 
             page_free(pt_inner.pages[i].pfn);
     }
     kfree(pt_inner.pages);
@@ -98,7 +98,7 @@ void pt_define_inner(struct pt_directory* pt, vaddr_t va) {
     for(i = 0; i < pt->pages[index].size; i++) {
         pt->pages[index].pages[i].valid = 0;
         pt->pages[index].pages[i].pfn = PFN_NOT_USED;
-        pt->pages[index].pages[i].swapped_out = -1;
+        pt->pages[index].pages[i].swap_offset = -1;
     }
 }
 
@@ -160,7 +160,7 @@ off_t pt_get_offset(struct pt_directory* pt, vaddr_t va) {
 
     if(pt->pages[p1].valid) {
         if(pt->pages[p1].pages[p2].valid) {
-            flag = pt->pages[p1].pages[p2].swapped_out;
+            flag = pt->pages[p1].pages[p2].swap_offset;
         }
         else {
             return -1;
@@ -192,7 +192,7 @@ void pt_set_offset(struct pt_directory* pt, vaddr_t va, off_t offset) {
     // should be valid even after creation
     KASSERT(pt->pages[p1].valid == 1);
     pt->pages[p1].pages[p2].valid = 1;
-    pt->pages[p1].pages[p2].swapped_out = offset;
+    pt->pages[p1].pages[p2].swap_offset = offset;
 
     // if offset is greater than 0 it means that the page has been swapped out
     // pt->pages[p1].pages[p2].pfn = pa;
