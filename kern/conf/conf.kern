@@ -342,7 +342,8 @@ file      proc/proc.c
 
 file      vm/kmalloc.c
 
-#optfile dumbvm   vm/addrspace.c
+#defoption dumbvm
+#optofffile dumbvm vm/addrspace.c
 
 #
 # Network
@@ -476,7 +477,7 @@ defoption file
 #                                      #
 ########################################
 #defoption dumbvm
-optfile dumbvm vm/addrspace.c
+#optofffile dumbvm vm/addrspace.c
 
 ########################################
 #                                      #

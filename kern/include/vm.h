@@ -38,6 +38,7 @@
 
 
 #include <machine/vm.h>
+#include "opt-dumbvm.h"
 
 /* Fault-type arguments to vm_fault() */
 #define VM_FAULT_READ        0    /* A read was attempted */
@@ -45,7 +46,7 @@
 #define VM_FAULT_READONLY    2    /* A write to a readonly page was attempted*/
 
 
-#if OPT_OLD
+#if OPT_DUMBVM
 /* Initialization function */
 void vm_bootstrap(void);
 
