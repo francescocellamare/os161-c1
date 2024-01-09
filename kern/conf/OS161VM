@@ -1,5 +1,4 @@
-# Kernel config file using dumbvm.
-# This should be used until you have your own VM system.
+# Kernel config file
 
 include conf/conf.kern		# get definitions of available options
 
@@ -50,4 +49,5 @@ options fork
 # lab5
 options file
 
+# assignment
 options os161vm

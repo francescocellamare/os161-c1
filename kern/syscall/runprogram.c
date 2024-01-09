@@ -44,6 +44,7 @@
 #include <vfs.h>
 #include <syscall.h>
 #include <test.h>
+#include "opt-dumbvm.h"
 
 /*
  * Load program "progname" and start running it in usermode.
@@ -90,7 +91,7 @@ runprogram(char *progname)
 		return result;
 	}
 
-#if OPT_OLD
+#if OPT_DUMBVM
 	/* Done with the file now. */
 	vfs_close(v);
 #endif
