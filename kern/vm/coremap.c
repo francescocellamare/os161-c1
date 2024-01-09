@@ -314,6 +314,7 @@ static paddr_t getppage_user(vaddr_t va, struct addrspace *as) {
 
             pos = victim_pa / PAGE_SIZE;
             result = tlb_remove_by_va(victim_va);
+            KASSERT(result == 0);
         }
         else
         { 
