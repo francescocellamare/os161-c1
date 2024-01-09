@@ -9,6 +9,7 @@
 #include <mips/tlb.h>
 #include <addrspace.h>
 #include <vm.h>
+#include <syscall.h>
 
 #include <elf.h>
 #include <coremap.h>
@@ -72,6 +73,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
     switch (faulttype) {
         case VM_FAULT_READONLY:
             // panic("dumbvm: got VM_FAULT_READONLY\n");
+            sys__exit(1);
             return EACCES;
         case VM_FAULT_READ:
         case VM_FAULT_WRITE:
@@ -153,7 +155,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
         if (result)
             return EFAULT;
     }    
-
+    
 
     // otherwise update the TLB
     spl = splhigh();
@@ -163,7 +165,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
     ehi = pageallign_va;
     elo = pa | TLBLO_VALID;
 
-    if (seg->p_permission == (PF_R | PF_W) || seg->p_permission == PF_S)
+    if (seg->p_permission == (PF_R | PF_W) || seg->p_permission == PF_S || seg->p_permission == PF_W)
     {
         elo = elo | TLBLO_DIRTY;
     }
