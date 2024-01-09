@@ -41,7 +41,6 @@ void swapfile_init(void)
     //if does not exist it will be created
     //The swap file is where all the pages will be written
     //when at run time more than 9MB is needed => panic is called
-    kprintf("SWAPFILE INIT\n");
     result = vfs_open((char *)"emu0:/SWAPFILE", O_RDWR | O_CREAT, 0,  &v);
     KASSERT(result == 0);
     return;
@@ -83,7 +82,7 @@ int swap_out(paddr_t ppaddr, vaddr_t pvaddr){
         return -1;
     }
 
-    // kprintf("SWAPOUT %d at pa:0x%x va:0x%x in position %d\n", timesOut, ppaddr, pvaddr, free_index);
+    // kprintf("SWAPOUT %d at pa:O0x%x va:0x%x in position %d\n", timesOut, ppaddr, pvaddr, free_index);
     timesOut++;
     page_offset = free_index * PAGE_SIZE;
     KASSERT(page_offset < FILE_SIZE);
@@ -97,7 +96,6 @@ int swap_out(paddr_t ppaddr, vaddr_t pvaddr){
         return -1;
     }
     else{
-        // kprintf("Putting pa: 0x%x va: 0x%x at position %d\n", ppaddr, pvaddr, free_index);
         spinlock_acquire(&filelock);
         swap_list[free_index].free = 0;
         swap_list[free_index].ppadd = ppaddr;
@@ -121,27 +119,12 @@ int swap_in(paddr_t ppadd, off_t offset){
 
     struct iovec iov;
     struct uio u;
-    // int i;
     int page_index;
-    // off_t new_offset;
     int result;
 
     // kprintf("SWAPIN %d at pa:0x%x va:0x%x in position %lld\n", timesIn, ppadd, pvadd, offset/PAGE_SIZE);
     timesIn++;
 
-    // page_index = -1;
-    // for (i=0; i< NUM_PAGES; i++)
-    // {
-    //     if(swap_list[i].pvadd == pvadd)
-    //     {
-    //         page_index = i;
-    //         kprintf("FOUND AT POS %d -- looking for va: 0x%x and found va 0x%x (in swapfile)\n", page_index, pvadd, swap_list[i].pvadd);
-    //         break;
-    //     }
-    // } 
-
-    // KASSERT(page_index != -1);
-    // new_offset =(off_t)(page_index * PAGE_SIZE);
     KASSERT(offset >= 0);
     
     page_index = offset/PAGE_SIZE;

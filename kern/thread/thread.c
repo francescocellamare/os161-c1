@@ -503,7 +503,6 @@ thread_fork(const char *name,
 		return ENOMEM;
 	}
 
-	coremap_init();
 	/* Allocate a stack */
 	newthread->t_stack = kmalloc(STACK_SIZE);
 	if (newthread->t_stack == NULL) {

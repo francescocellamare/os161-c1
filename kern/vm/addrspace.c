@@ -125,8 +125,6 @@ as_destroy(struct addrspace *as)
 	pt_destroy(as->pt);
 	vfs_close(v);
 	kfree(as);
-	swap_shutdown();
-	// coremap_turn_off();
 }
 
 /**
