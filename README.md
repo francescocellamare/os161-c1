@@ -1,14 +1,17 @@
 # os161-c1
 ## Project objective
 The project aims at expanding the memory management (dumbvm) module, by fully replacing
-it with a more powerful virtual memory manager based on process page tables
+it with a more powerful virtual memory manager based on process page tables.
 
 With the current implementation of DUMBVM, the kernel crashes when the TLB is full, our goal is to implement a new virtual-memory system that has:
 1. A replacement policy for the TLB
 2. On-demand loading of pages so that not the whole pages corresponding to a program will be loaded into memory when the program starts
 3. Page replacement for pages in physical memory when no free pages are available
 
+The new virtual memory should use on-demand paging so instead of loading the entire program inside the physical memory, a page is only loaded when needed, so when demanded by a program in execution.  By loading only the portions of program that are needed, memory is used more efficiently.
+
 ## Design choices overview
+To implement on-demand paging, we adopted the following architectural frameworks for key components within the virtual memory system:
 #### TLB Management
 - The replacement policy chosen is a simple `Round-Robin` policy
 #### Page Table
@@ -19,32 +22,57 @@ With the current implementation of DUMBVM, the kernel crashes when the TLB is fu
 - The swaping policy is also `Round-Robin`
 
 # Implementation
-## TLB Fault
+Our main files used to manage the virtual memory are:
+- addrspace.c
+- coremap.c
+- kmalloc.c
+- pt.c
+- segments.c
+- vm_tlb.c
+- vmc1.c
+
+We're going discuss more in details the main tasks of each file in the upcoming sections .
+
+## Overview of TLB miss handling
 ### [vm/vmc1.c](./kern/vm/vmc1.c) & [vm_tlb.c](./kern/vm/vm_tlb.c)
 
-When a page fault occurs in the TLB, `vm_fault` is called with the virtual address of the address that cause the fault.
-first we apply the mask `PAGE_FRAME` to check the page virtual address that triggered the fault.
-We check the fault happened in which segment (for more details about segment /link/) to check the permession of this segment.
-For this part we have many possibilities:
-1. The `pa == PFN_NOT_USED` so no physical address is associated to the page and the page has never been loaded from the disk before (so also the variable `swapped_out = pt_get_state(as->pt, faultaddress)` is set to -1)
+When a TLB miss occurs, `vm_fault` is called with the virtual address of the address that caused the fault.
+First we apply the mask `PAGE_FRAME` to check the page virtual address that triggered the fault.
+We check the fault happened in which segment (for more details about segment /link/) to check the permession of this segment, and we check if the page exist in the physical memory or not.
+For this part we have many cases:
+1. The `pa == PFN_NOT_USED` so no physical address is associated to the page and the page has never been loaded from the disk before (so also the variable `swap_offset = pt_get_offset(as->pt, faultaddress)` is set to -1) the offset variable defined in the page table entry correspoding to the page gives the offset of the page in the `SWAPFILE`  if this page has been loaded from the disk before and then swapped out of the RAM when the RAM was full and a new page was requested. (more about how this work in swapfile section):
     - Ask for a new frame from the coremap
-      using `page_alloc` that would return a physical address for the corresponding virtual address more information about this step in /LINK/, page alloc will also handle the case where the physical memory is full and we need to swap out pages in order to swap in the new page
+      using `page_alloc` that would return a physical address for the corresponding virtual address more information about this step in /LINK/, page alloc will also handle the case where the physical memory is full and we need to swap out pages in order to load the new page from the disk.
     - Then we update the page table with the new physical address corresponding to the virtual address
     - If the page belongs to a stack (`seg->p_permission == PF_S`) we zero-it out since in C uninitialized variables are not guaranteed to be set to any particular value. Therefore, if a new page is not zeroed-out before it is used, it may contain arbitrary data that could cause the program to behave unpredictably. By zeroing-out the new page, we ensure that it is initialized to a known state of all zeroes 1
     - If the page does not belong to a stack (`seg->p_permission == PF_S`) we load it to the RAM from the disk with `seg_load_page`
-2. If physical address is found but it is swapped out (by checking the corresponding flag: `swapped_out >= 0 `) we call `page_alloc` to allocate a new physical address for the page and then `swap_in` to load it again into the physical memory
+2. If physical address is found but it is swapped out ( `swap_offset = pt_get_offset(as->pt, faultaddress)` the returned value is the offset were the page exist in the `SWAPFILE` so it will be loaded from there):
+    - we call `page_alloc` to allocate a new physical address this physical address is corresponding to the physical address of the swapped out page.
+    - Then call `swap_in` to load it again into the physical memory we receive from `page_alloc`, we also pass to the function the offset of the page inside the `SWAPFILE` 
+    - Then we update the corresponding entry in page table to set the `swap_offset` variable into -1 since the page is no longer in the `SWAPFILE` and the physical address of the page to the newly obtained physical address
+    - We check the page table if the victim page exist in the page tabe we set the entry corresponding to it to invalid
+    
 
-### More about [vm/vmc1.c](./kern/vm/vmc1.c)
+#### more about [vm/vmc1.c](./kern/vm/vmc1.c)
 in `vm_bootstrap` we initialize the coremap and the swapfile and in `vm_shutdown` we clean them
 
 ## Coremap
-Coremap is used to manage physical pages. So, we pack a physical page's information into a structure (called struct `coremap_entry`) and use this struct to represent a physical page. We use an array of struct coremap_entry to keep all physical pages information. This array, aka, coremap, will be one of the most important data structure in this project.
+Coremap is used to manage physical pages. So, we pack a physical page's information into a structure (called struct `coremap_entry`) and use this struct to represent a physical page. We use an array of struct coremap_entry to keep all physical pages information. This array, aka, coremap, will be one of the most important data structure in this project. One entry of this data strucure corresponds to one frame in the physical address. 
 ```
 struct coremap_entry {
     struct addrspace *as;
     enum status_t status;
     vaddr_t vaddr;
     unsigned int alloc_size;
+};
+```
+The status variable can take the following values:
+```
+enum status_t {
+    fixed, //for kernel pages
+    free,  //when page is removed from the page table (swapped out)
+    dirty, //when user pages
+    clean  //the coremap entries are initialized to clean
 };
 ```
 The size of the coremap is obtained by:
@@ -66,14 +94,15 @@ for(i = 0; i < nRamFrames; i++) {
         //the physical address  = i * PAGE_SIZE
     }
 ```
+So at first all frames are set to `clean` 
 When a process request pages we have to possibility:
-- kernelfunction requesting a number of pages
+- kernel function requesting a number of pages
 - User function requesting one page
 
 #### For kernel functions:
-To get free pages from the Physical memory we call `getfreeppages` it's a kernel function 
-which takes as parameter the number of pages needed, it loops over the ram frames and checks if there's enough memory for  the number of pages requested it returns the free physical address otherewise it returns 0
-This function is called by `getppages` that checks the return of `getfreeppages` when the function returns 0, a victim is chosen in the TLB by calling `get_victim_coremap` the victims in the coremap are chosen by round-robin and  an extra check that the chosen pages are not fixed or clean.
+To get free pages from the Physical memory we call `getfreeppages` it's a kernel function, a kernel function can request more than one page.
+`getfreeppages` takes as parameter the number of pages needed, it loops over the ram frames and checks if there's enough memory for  the number of pages requested it returns the free physical address otherewise it returns 0.
+This function is called by `getppages` that checks the return of `getfreeppages` when the function returns 0, a victim is chosen in the coremap by calling `get_victim_coremap` the victims in the coremap are chosen by round-robin with  an extra check that the chosen pages are not fixed or clean.
 For the chosen victims, we swap them out of the physical memory by calling `swap_out` and passing the physical and virtual addresses.
 We then update the coremap structure with the new values.
 ```
@@ -112,20 +141,23 @@ we take the position of the victim in the coremap by diving the physical address
     return pa;
 ```
 
+When a physical page is first allocated for a user process, its state is set to `dirty` , not `clean`. Since this page do not have a copy in `SWAPFILE` (disk). 
 Note: Whenever we access the coremap we acquire the `freemem_lock` and we release it when we finish reading or writing from it.
 
 `getppage_user` is called by the function `page_alloc` that  just returns the physical address obtained by `getppage_user`
 
-the function `page_free` is just called by the `coremap_shutdown` to free all the entries of the coremap at the end of the process
+the function `page_free` is called by the `pt_destroy` to free all the entries of the coremap at the end of a process. While the function `coremap_shutdown` is called when we want to shutdown the system.
+
 
 ## Page Table
 ### [vm/pt.c](./kern/vm/pt.c)
-The page table is a memory management data structure that organizes the correspondance between the virtual and the physical addresses. We used a two level page table.
+The page table is a memory management data structure that organizes the correspondance between the virtual and the physical addresses. We used a two level page table. So we have an outer table of size `1024` and several inner tables of size `1024` also. The structure of tha page table is defined as follows:
+
 ```
 struct pt_inner_entry {
     unsigned int valid;
     paddr_t pfn;
-    unsigned int swapped_out; 
+    off_t swap_offset; 
 };
 struct pt_outer_entry {
     unsigned int valid;
@@ -138,33 +170,40 @@ struct pt_directory {
 };
 
 ```
+So each entry of the inner page table has three fields:
+1. valid: tells if this entry is valid and associated to a page having the corresponding virtual address 
+2. pfn: which the physical address corresponding to the virtual address of the entry
+3. swap_offset: the offset of the page in the `SWAPFILE` if the page has been swapped out of the physical memory or equal to -1 if it's still in physical memory
+
 ### How it works:
 Given a virtual address, it is composed of 3 parts: 
-- p1 : 10 bits indexing the inner page table
--  p2 : 10 bits indexing entries into the inner page table 
-- d  : 12 bits offset
+- p1 : 10 bits index into the outer page table 
+- p2 : 10 bits for displacement within the inner page table.
+- d  : 12 bits offset inside the page we don't use it since we load the whole  page anyway
 
-We look for p1 and p2 having the following masks: 
+We get p1, p2 and d having the following masks: 
 - `P1_MASK 0xFFC00000`
 - `P2_MASK 0x003FF000`
 - `D_MASK 0x00000FFF`
 
-The following cases may happen:
-  1. found a page so its PAGE FRAME NUMBER is returned
-  2. found an invalid page so PFN_NOT_USED constant is returned
-  3. the outer page table (indexed by p1) doesn't contain a  valid entry, this should not occur in standard behavior
+When a user requests a page, the virtual address of the page is used to lookup the page table, this is done by `pt_get_pa` which is called in `vm_fault` to check that the page is associated to a physical address. We first get `p1`, we check if the entry corresponding to the offset `p1` inside of the outer page table is valid, if yes, we use `p2` to check if the entry corresponding to the offset `p2` in the inner table is valid, if yes, we return the physical address which is the variable `pfn` . When a virtual address is not found in the page table, we call `page_alloc` that will return a new physical address, then `pt_set_pa` is called to set an entry for this virtual address, if a new inner table is needed it will be created in this step by calling `pt_define_inner`.
 
-Each page has 2 state identifiers:
-- valid: to check wether this page has been used before or not
-- swapped_out: used later when doing the swapping to check wether this page was swapped out of the physical memory and is now in the swap file
+`pt_define_inner` sets the valid bit corresponding to the inner table of the page in the outer table to 1 and allocate a new inner table inside of the memory by:
+```
+pt->pages[index].pages = kmalloc(sizeof(struct pt_inner_entry)*SIZE_PT_INNER);
+``` 
+then we set all entries of this table to the default values.
 
-### Victim selection
+- `pt_get_pa` takes the virtual address of the requested page and returns the correspoding physical address if found or `PFN_NOT_USED` if the page has never been loaded into the physical memory.
+- `pt_get_offset` returns the offset of the page in the `SWAPFILE` if the page has been swapped out of the physical memory or `-1` if not.
+`pt_set_offset` is called when the page is swapped out or swapped in to change its `swap_offset` variable
 
-When no more free frames are available, so the physical memory is full we need to perform the swap out of a page into the swap file.
 
-the main function for the page table is `pt_get_pa` that takes the `va` that resulted in the TLB fault and returns the physical address if found or `PFN_NOT_USED` if it was not used before and should be loaded from the disk
 
-## Swapfile
+
+
+
+## Swap file
 ### [vm/swapfile.c](./kern/vm/swapfile.c)
 
 We created a file called SWAPFILE of size 9MB (can be modified) which is divided into n number of pages with `n = FILE_SIZE / PAGE_SIZE`.
@@ -176,7 +215,7 @@ struct swap_page
     paddr_t ppadd;
     vaddr_t pvadd; 
     off_t swap_offset;
-    int free; //1: free 0:taken
+    int free; //1: free 0: taken
 };
 ```
 and we initialized the following list:
@@ -186,37 +225,105 @@ static struct swap_page swap_list[NUM_PAGES];
 in the `swap_init` function we set all the parameters of the swapfile to 0 except the `free` variable we set it to 1. 
 We have two important functions in the `swapfile.c`:
 1. `swap_out(paddr_t ppaddr, vaddr_t pvaddr)`
-    This function is called whenver we want to remove a page (the victim page) from the physical memory - RAM - and we copy it to the SWAPFILE
+    This function is called whenever we want to remove a page (the victim page) from the physical memory - RAM - and we copy it to the SWAPFILE
     1. Look for the first free position in the SWAPFILE
         ```
         for(i=0; i< NUM_PAGES; i++)
-    {
+        {   
         entry = &swap_list[i];
         if(entry->free)
         {
             free_index = i;
             break;
         }
-    }
-    ```
+        }
+        ```
+    
     2. If no more free pages are available return the following panic:
-    ```
-    panic("swapfile.c : Out of swap space \n");
-    ```
+        ```
+        panic("swapfile.c : Out of swap space \n");
+        ```
     3. the offset inside of the `SWAPFILE` Where the page will be loaded is given by: `page_offset = free_index * PAGE_SIZE`
     4. update the `swap_list` and set the `free` variable to 0 so the entry is no more available
-    ```
-    swap_list[free_index].free = 0;
-    swap_list[free_index].ppadd = ppaddr;
-    swap_list[free_index].pvadd = pvaddr;
-    swap_list[free_index].swap_offset = page_offset;
-    ```
-    5. `swap_out` returns a function that would be later on passed to `swap_in` 
+        ```
+        swap_list[free_index].free = 0;
+        swap_list[free_index].ppadd = ppaddr;
+        swap_list[free_index].pvadd = pvaddr;
+        swap_list[free_index].swap_offset = page_offset;
+        ```
+    5. `swap_out` returns the offset where the page was before removing it from the SWAPFILE this same offset will be passed to the function `swap_in` , since at this offset we get the previously stored page.
 2. `swap_in(paddr_t ppadd, vaddr_t pvadd, off_t offset)` 
     This function is called whenever we want to swap a page from the SWAPFILE into the physical memory, so the page is demanded by a process and in the coremap it was flagged as `swapped_out`.
     1. We get the position of the page in the SWAPFILE from 
-    
-    
+  
+  
+
+## Address space
+### [vm/addrspace.c](./kern/vm/addrspace.c)
+
+The address space of each program is split into 3 segments:
+- Code segment
+- Data segment 
+- Stack segment
+
+We define a struct address space that contain the three segments and will be allocated to each program when the program starts by calling `as_create()` and destroyed at the end of the program by calling `as_destroy()` :
+
+```
+struct addrspace {
+#if OPT_DUMBVM
+        vaddr_t as_vbase1;
+        paddr_t as_pbase1;
+        size_t as_npages1;
+        vaddr_t as_vbase2;
+        paddr_t as_pbase2;
+        size_t as_npages2;
+        paddr_t as_stackpbase;
+#else
+        struct segment* code;
+        struct segment* data;       
+        struct segment* stack;
+        struct pt_directory *pt;
+
+        // struct segment* heap;        /*no heap management for this assignment*/
+#endif
+};
+```
+the definition of the struct for our implementation of the virtual memory differ than the one of DUMBVM.
+The code segment contains the actual machine code that will be executed by the processor when the process starts execution and it is read-only.
+struct addrspace {
+#if OPT_DUMBVM
+        vaddr_t as_vbase1;
+        paddr_t as_pbase1;
+        size_t as_npages1;
+        vaddr_t as_vbase2;
+        paddr_t as_pbase2;
+        size_t as_npages2;
+        paddr_t as_stackpbase;
+#else
+        struct segment* code;
+        struct segment* data;       
+        struct segment* stack;
+        struct pt_directory *pt;
+
+        // struct segment* heap;        /*no heap management for this assignment*/
+#endif
+};
+
+And the struct segment is defined as follows:
+```
+struct segment {
+    uint32_t	p_type;      /* Type of segment */
+	uint32_t	p_offset;    /* Location of data within file */
+	uint32_t	p_vaddr;     /* Virtual address aka base_addr*/
+	uint32_t	p_filesz;    /* Size of data within file */
+	uint32_t	p_memsz;     /* Size of data to be loaded into memory*/
+	uint32_t	p_permission;   
+    struct vnode *vnode;
+};
+
+```
+
+
 
 
 
