@@ -31,9 +31,7 @@
  *  kmalloc -> 3 frames:        3 0 0 0 0 0 0 0 0 0 0 0
  *  page_alloc -> 1 frame:      3 0 0 1 0 0 0 0 0 0 0 0
  * 
- * TODO:
- * 1. swapping
- * 2. check locks
+
 */
 
 static struct coremap_entry *coremap = NULL; // coremap pointer

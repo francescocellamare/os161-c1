@@ -85,7 +85,7 @@ as_create(void)
 }
 
 /**
- * Copy an address space into another, no idea why it should be used
+ * Copy an address space into another
 */
 int
 as_copy(struct addrspace *old, struct addrspace **ret)

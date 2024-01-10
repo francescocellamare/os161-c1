@@ -64,7 +64,7 @@ struct addrspace {
         struct segment* stack;
         struct pt_directory *pt;
 
-        // struct segment* heap;        /*no heap management for this assignment, I hope*/
+        // struct segment* heap;        /*no heap management for this assignment*/
 #endif
 };
 
