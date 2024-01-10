@@ -42,6 +42,9 @@
 #include <coremap.h>
 #include <vm_tlb.h>
 #include <vmc1.h>
+#include <statistics.h>
+
+#include "opt-dumbvm.h"
 
 /*
  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
@@ -154,6 +157,8 @@ as_activate(void)
 		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
 	}
 
+	increment_statistics(STATISTICS_TLB_INVALIDATE);
+
 	splx(spl);
 	
 }
@@ -183,9 +188,39 @@ as_deactivate(void)
 		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
 	}
 
+	increment_statistics(STATISTICS_TLB_INVALIDATE);
+
 	splx(spl);
 }
 
+#if OPT_DUMBVM
+/*
+ * Set up a segment at virtual address VADDR of size MEMSIZE. The
+ * segment in memory extends from VADDR up to (but not including)
+ * VADDR+MEMSIZE.
+ *
+ * The READABLE, WRITEABLE, and EXECUTABLE flags are set if read,
+ * write, or execute permission should be set on the segment. At the
+ * moment, these are ignored. When you write the VM system, you may
+ * want to implement them.
+ */
+int
+as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
+		 int readable, int writeable, int executable)
+{
+	/*
+	 * Write this.
+	 */
+
+	(void)as;
+	(void)vaddr;
+	(void)memsize;
+	(void)readable;
+	(void)writeable;
+	(void)executable;
+	return ENOSYS;
+}
+#else
 /*
  * ANCHOR[id=define_region] 
  * Set up a segment at virtual address VADDR of size MEMSIZE. The
@@ -222,7 +257,7 @@ as_define_region(struct addrspace *as, uint32_t type, uint32_t offset ,vaddr_t v
 	KASSERT(res == 0);	// segment defined correctly
 	return res;
 }
-
+#endif
 /**
  * ANCHOR[id=prepare_load]
  * No idea, called after as_define_region() in load_elf()

@@ -6,6 +6,7 @@
 #include <vm.h>
 #include <bitmap.h>
 #include <swapfile.h>
+#include <statistics.h>
 
 
 
@@ -90,6 +91,7 @@ int swap_out(paddr_t ppaddr, vaddr_t pvaddr){
 
     uio_kinit(&iov, &u, (void *) PADDR_TO_KVADDR(ppaddr), PAGE_SIZE, page_offset, UIO_WRITE);
     VOP_WRITE(v, &u);
+
     if(u.uio_resid != 0)
     {
         panic("swapfile.c: Cannot write to swap file");
@@ -103,6 +105,7 @@ int swap_out(paddr_t ppaddr, vaddr_t pvaddr){
         swap_list[free_index].swap_offset = page_offset;
         spinlock_release(&filelock);
 
+        increment_statistics(STATISTICS_SWAP_FILE_WRITE);
         return swap_list[free_index].swap_offset;
     }
 
@@ -148,6 +151,9 @@ int swap_in(paddr_t ppadd, off_t offset){
         return -1;
     }
     
+    increment_statistics(STATISTICS_PAGE_FAULT_DISK);
+    // increment_statistics(STATISTICS_ELF_FILE_READ);
+    increment_statistics(STATISTICS_SWAP_FILE_READ);
     return swap_list[page_index].swap_offset;
     
 }

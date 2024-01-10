@@ -31,7 +31,10 @@
 #include <lib.h>
 #include <spinlock.h>
 #include <vm.h>
-#include <coremap.h>
+#include "opt-dumbvm.h"
+#if !OPT_DUMBVM
+	#include <coremap.h>
+#endif
 
 /*
  * Kernel malloc.

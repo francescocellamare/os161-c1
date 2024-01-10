@@ -38,7 +38,7 @@
 #include <vm.h>
 #include <segments.h>
 #include "opt-dumbvm.h"
-#include "opt-old.h"
+
 struct vnode;
 
 
@@ -116,7 +116,7 @@ void              as_activate(void);
 void              as_deactivate(void);
 void              as_destroy(struct addrspace *);
 
-#if OPT_OLD
+#if OPT_DUMBVM
 int               as_define_region(struct addrspace *as,
                                    vaddr_t vaddr, size_t sz,
                                    int readable,

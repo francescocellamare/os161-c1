@@ -53,6 +53,7 @@
 #include "autoconf.h"  // for pseudoconfig
 
 #include "hello.h"
+#include "opt-os161vm.h"
 
 
 /*
@@ -153,6 +154,9 @@ shutdown(void)
 
 	kprintf("Shutting down.\n");
 
+	#if OPT_OS161VM
+		vm_shutdown();
+	#endif
 	vfs_clearbootfs();
 	vfs_clearcurdir();
 	vfs_unmountall();

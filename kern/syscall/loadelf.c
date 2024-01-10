@@ -59,7 +59,7 @@
 #include <addrspace.h>
 #include <vnode.h>
 #include <elf.h>
-#include "opt-old.h"
+#include "opt-dumbvm.h"
 
 /*
  * Load a segment at virtual address VADDR. The segment in memory
@@ -247,22 +247,23 @@ load_elf(struct vnode *v, vaddr_t *entrypoint)
 				ph.p_type);
 			return ENOEXEC;
 		}
-		#if OPT_OLD
-		kprintf("old\n");
-		result = as_define_region(as,
-					  ph.p_vaddr, ph.p_memsz,
-					  ph.p_flags & PF_R,
-					  ph.p_flags & PF_W,
-					  ph.p_flags & PF_X);
-
+		kprintf("%d) type: %d segment_offset: %x -- base_vaddr: %x -- file_size %x -- mem_size %d 0x%x ---- perm: %d \n", i, ph.p_type, ph.p_offset, ph.p_vaddr, ph.p_filesz, ph.p_memsz, ph.p_memsz, ph.p_flags);
+		#if OPT_DUMBVM
+			kprintf("dumbvm\n");
+			result = as_define_region(as,
+						  ph.p_vaddr, ph.p_memsz,
+						  ph.p_flags & PF_R,
+						  ph.p_flags & PF_W,
+						  ph.p_flags & PF_X);
+			KASSERT(pos == 0);
 		#else
-		result = as_define_region(as, 
-							ph.p_type, ph.p_offset, ph.p_vaddr, 
-							ph.p_memsz, ph.p_filesz, 
-							ph.p_flags & PF_R, 
-							ph.p_flags & PF_W, 
-							ph.p_flags & PF_X, pos, v);
-		pos += 1; 
+			result = as_define_region(as, 
+								ph.p_type, ph.p_offset, ph.p_vaddr, 
+								ph.p_memsz, ph.p_filesz, 
+								ph.p_flags & PF_R, 
+								ph.p_flags & PF_W, 
+								ph.p_flags & PF_X, pos, v);
+			pos += 1; 
 
 		#endif
 		if (result) {
@@ -270,7 +271,7 @@ load_elf(struct vnode *v, vaddr_t *entrypoint)
 		}
 	}
 
-	#if OPT_OLD
+	#if OPT_DUMBVM
 	result = as_prepare_load(as);
 	if (result) {
 		return result;

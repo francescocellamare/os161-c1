@@ -50,8 +50,10 @@
 #include <addrspace.h>
 #include <mainbus.h>
 #include <vnode.h>
-#include <coremap.h>
-
+#include "opt-dumbvm.h"
+#if !OPT_DUMBVM
+	#include <coremap.h>
+#endif
 
 /* Magic number used as a guard value on kernel thread stacks. */
 #define THREAD_STACK_MAGIC 0xbaadf00d
