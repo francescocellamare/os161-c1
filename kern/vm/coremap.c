@@ -113,17 +113,12 @@ void coremap_init() {
  * Releases the coremap's memory and disables it
 */
 void coremap_shutdown() {
-    int i;
 
     spinlock_acquire(&freemem_lock);
     coremapActive = 0;
-    // release each page
-    for(i = 0; i < nRamFrames; i++) {
-        page_free(i*PAGE_SIZE); 
-    }
     // release the handler
-    kfree(coremap);
     spinlock_release(&freemem_lock);
+    kfree(coremap);
 }
 
 /**
