@@ -179,7 +179,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
     }
 
     tlb_read(&victim_ehi, &victim_elo, victim);
-    if (victim_elo & TLBLO_VALID){
+    if ((victim_elo & TLBLO_VALID) == 1){
         increment_statistics(STATISTICS_TLB_FAULT_REPLACE);
     }else{
         increment_statistics(STATISTICS_TLB_FAULT_FREE);

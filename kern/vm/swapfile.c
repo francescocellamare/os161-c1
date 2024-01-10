@@ -152,7 +152,8 @@ int swap_in(paddr_t ppadd, off_t offset){
     }
     
     increment_statistics(STATISTICS_PAGE_FAULT_DISK);
-    increment_statistics(STATISTICS_ELF_FILE_READ);
+    // increment_statistics(STATISTICS_ELF_FILE_READ);
+    increment_statistics(STATISTICS_SWAP_FILE_READ);
     return swap_list[page_index].swap_offset;
     
 }
