@@ -258,8 +258,8 @@ We have two important functions in the `swapfile.c`:
   
   
 
-## Address space
-### [vm/addrspace.c](./kern/vm/addrspace.c)
+## Address space and Segments
+### [vm/addrspace.c](./kern/vm/addrspace.c) & [vm/segments.c](./kern/vm/segments.c)
 
 The address space of each program is split into 3 segments:
 - Code segment
@@ -283,45 +283,64 @@ struct addrspace {
         struct segment* data;       
         struct segment* stack;
         struct pt_directory *pt;
-
-        // struct segment* heap;        /*no heap management for this assignment*/
 #endif
 };
 ```
 the definition of the struct for our implementation of the virtual memory differ than the one of DUMBVM.
-The code segment contains the actual machine code that will be executed by the processor when the process starts execution and it is read-only.
-struct addrspace {
-#if OPT_DUMBVM
-        vaddr_t as_vbase1;
-        paddr_t as_pbase1;
-        size_t as_npages1;
-        vaddr_t as_vbase2;
-        paddr_t as_pbase2;
-        size_t as_npages2;
-        paddr_t as_stackpbase;
-#else
-        struct segment* code;
-        struct segment* data;       
-        struct segment* stack;
-        struct pt_directory *pt;
 
-        // struct segment* heap;        /*no heap management for this assignment*/
-#endif
-};
+`pt` is a pointer to the struct `pt_directory` that will be used for this program, more about this structure in `pagetable` section
 
-And the struct segment is defined as follows:
+And the struct segment is defined as follows in `segment.h` :
+
 ```
 struct segment {
     uint32_t	p_type;      /* Type of segment */
-	uint32_t	p_offset;    /* Location of data within file */
+	uint32_t	p_offset;    /* Location of data within file where the segment begins at */
 	uint32_t	p_vaddr;     /* Virtual address aka base_addr*/
 	uint32_t	p_filesz;    /* Size of data within file */
 	uint32_t	p_memsz;     /* Size of data to be loaded into memory*/
-	uint32_t	p_permission;   
+	uint32_t	p_permission;  /* describes what operations can be performed on the pages of the segment, could have the values */
     struct vnode *vnode;
 };
+```
+
+for `p_permission` the possible values are defined in `elf.h` and are:
+```
+/* values for p_flags */
+#define	PF_R		0x4	/* Segment is readable */
+#define	PF_W		0x2	/* Segment is writable */
+#define	PF_X		0x1	/* Segment is executable */
+#define PF_S        0x8 /* Segment is stack */
 
 ```
+So they define the possible actions on the corresponding segment.
+
+
+
+when a program starts `as_create()` is called by `loadelf.c` and it allocates kernel space for each segment, for now all the segments are empty.
+
+In `DUMBVM`, When a program starts, `load_segment()` was called to load the whole virtual address space into the physical memory. In our implementation we adapted a different approach, so the function `load_elf()` is called and it defines the address space segments of the program by gettig the information from the `ELF FILE` that will stay open until `as_destroy()` is called, `as_destroy()` free all the segments and the page table associated to the program and it is called at the end of the process.  In `load_elf()` we also call `as_define_region` passing the permession flags as parameters and the fille handler, these flags are managed inside  `as_define_region()` with bit-wise operations:
+```
+if(readable)
+		perm = perm | PF_R;
+	if(writeable)
+		perm = perm | PF_W;
+	if(executable)
+		perm = perm | PF_X;
+
+```
+For stack segment, `as_define_stack()` is called in `runprogram()` to define the user stack in the address space, the stack pointer is passed as parameter and it is assigned to the last address inside the user address space (0x80000000). To make sure no overlap would occur between the stack  segments and the other segments, we assign a fixed number of pages (12 can be modified ) for the stack.
+
+The main function we used in `segments.c`  is `seg_load_page()` which is called in `vm_fault` when a page is requested for the first time, to read it from the file and load to the disk. 
+`seg_load_page` calculates how many pages are needed, then calculates the index of the page inside the segment and the offset we need to add for the fault page. These parameters will be used to fill up the uio structure as needed for handling the fault.
+
+#### more about `addrspace.c` 
+As the design choice was to have a per-process TLB  `as_activate` was called in `runprogram()` to  activate the given address space as the currently in use one, so all TLB entries are deactivated when a context switch is performed.
+
+
+
+
+
 
 
 
