@@ -161,6 +161,34 @@ as_activate(void)
 	splx(spl);
 	
 }
+
+void
+as_deactivate(void)
+{
+	int i, spl;
+	struct addrspace *as;
+
+	as = proc_getas();
+	if (as == NULL) {
+		/*
+		 * Kernel thread without an address space; leave the
+		 * prior address space in place.
+		 */
+		return;
+	}
+
+	/* Disable interrupts on this CPU while frobbing the TLB. */
+	spl = splhigh();
+
+	for (i=0; i<NUM_TLB; i++) {
+		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+	}
+
+	increment_statistics(STATISTICS_TLB_INVALIDATE);
+
+	splx(spl);
+	
+}
 /*
  * ANCHOR[id=define_region] 
  * Set up a segment at virtual address VADDR of size MEMSIZE. The
