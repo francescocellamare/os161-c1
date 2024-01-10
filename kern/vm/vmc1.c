@@ -15,6 +15,7 @@
 #include <coremap.h>
 #include <vmc1.h>
 #include <swapfile.h>
+#include <statistics.h>
 
 
 static unsigned int current_victim;
@@ -34,12 +35,15 @@ void vm_bootstrap(void)
 
     coremap_init();
     current_victim = 0;
+    init_statistics();
 
 }
 
 void vm_shutdown(void)
 {
     coremap_shutdown();
+    swap_shutdown();
+    print_all_statistics();
 }
 
 void vm_can_sleep(void)
@@ -59,7 +63,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 {
     int spl, new_page, result; //i, found;
     unsigned int victim;
-	uint32_t ehi, elo;
+	uint32_t ehi, elo, victim_ehi, victim_elo;
 	struct addrspace *as;
     paddr_t pa; 
     struct segment * seg;
@@ -111,6 +115,9 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 
     // look into the pagetable
     pa = pt_get_pa(as->pt, faultaddress);
+    if (pa > 0) {
+        increment_statistics(STATISTICS_TLB_RELOAD);
+    }
     swap_offset = pt_get_offset(as->pt, faultaddress);
     
     // if not exists then allocate a new frame
@@ -130,6 +137,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
             //data that could cause the program to behave unpredictably. By zeroing-out the new page, 
             //we ensure that it is initialized to a known state of all zeroes 1
             bzero((void *)PADDR_TO_KVADDR(pa), PAGE_SIZE);
+            increment_statistics(STATISTICS_PAGE_FAULT_ZERO);
         }
 
         new_page = 1;
@@ -155,8 +163,8 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
         if (result)
             return EFAULT;
     }    
-    
 
+    increment_statistics(STATISTICS_TLB_FAULT);
     // otherwise update the TLB
     spl = splhigh();
 
@@ -168,6 +176,13 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
     if (seg->p_permission == (PF_R | PF_W) || seg->p_permission == PF_S || seg->p_permission == PF_W)
     {
         elo = elo | TLBLO_DIRTY;
+    }
+
+    tlb_read(&victim_ehi, &victim_elo, victim);
+    if (victim_elo & TLBLO_VALID){
+        increment_statistics(STATISTICS_TLB_FAULT_REPLACE);
+    }else{
+        increment_statistics(STATISTICS_TLB_FAULT_FREE);
     }
 
     tlb_write(ehi, elo, victim);

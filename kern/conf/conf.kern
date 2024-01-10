@@ -492,3 +492,4 @@ optfile os161vm vm/pt.c
 optfile os161vm vm/vmc1.c
 optfile os161vm vm/swapfile.c 
 optfile os161vm vm/vm_tlb.c
+optfile os161vm vm/statistics.c

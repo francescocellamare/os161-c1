@@ -15,7 +15,7 @@
 #include <vmc1.h>
 #include <vnode.h>
 #include <uio.h>
-
+#include <statistics.h>
 
 /**
  * Module for segment mgmt, a segment is defined as a section of an address space which is going to be loaded
@@ -184,7 +184,13 @@ int seg_load_page(struct segment* seg, vaddr_t va, paddr_t pa) {
 
     if(pa > 0) {
         zero(pa, PAGE_SIZE);
-
+        if (read_len == 0){
+            increment_statistics(STATISTICS_PAGE_FAULT_ZERO);
+        }
+        else{
+            increment_statistics(STATISTICS_ELF_FILE_READ);
+            increment_statistics(STATISTICS_PAGE_FAULT_DISK);
+        }
     } 
 
 

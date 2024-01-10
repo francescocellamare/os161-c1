@@ -42,6 +42,7 @@
 #include <coremap.h>
 #include <vm_tlb.h>
 #include <vmc1.h>
+#include <statistics.h>
 
 #include "opt-dumbvm.h"
 
@@ -156,6 +157,8 @@ as_activate(void)
 		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
 	}
 
+	increment_statistics(STATISTICS_TLB_INVALIDATE);
+
 	splx(spl);
 	
 }
@@ -184,6 +187,8 @@ as_deactivate(void)
 	for (i=0; i<NUM_TLB; i++) {
 		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
 	}
+
+	increment_statistics(STATISTICS_TLB_INVALIDATE);
 
 	splx(spl);
 }
