@@ -359,6 +359,40 @@ The main function we used in `segments.c`  is `seg_load_page()` which is called 
 #### more about `addrspace.c` 
 As the design choice was to have a per-process TLB  `as_activate()` was called in `runprogram()` to  activate the given address space as the currently in use one, so all TLB entries are deactivated when a context switch is performed.
 
+## Tests and Statistics
+
+To check the new implementation of the virtual memory we ran the following tests:
+- palin
+- huge
+- ctest
+- sort
+- matmul
+
+To test the kernel we run the following tests:
+- at
+- at2
+- bt
+- tlt
+- km1
+- km2
+
+The following results were obtained:
+
+||Palin|Huge|Ctest|Sort|Matmult|
+| :- | :-: | :-: | :-: | :-: | :-: |
+|TLB Faults|13918|7574|249425|8483|4824|
+|TLB Faults with Free|13918|7574|249425|8483|4824|
+|TLB Faults with Replace|0|0|0|0|0|
+|TLB Invalidations|8010|7190|251495|4501|1586|
+|TLB Reloads|13913|3908|123658|6198|3967|
+|Page Faults (zero filled) |1|512|257|289|380|
+|Page Faults (disk)|4|3154|125510|1996|477|
+|Page Faults from ELF|4|3|3|4|3|
+|Page Faults from Swapfile|0|3151|125507|1992|474|
+|Swapfile Writes|0|3631|125724|2242|814|
+
+Further more, to test the read-only text segment functionality we set all the segments to read-only.
+
 ## Team workload division
 
 About the workload division, at the beginning of the project we started with brainstorming, thinking together of possible solutions and design choices. For this part, we met and worked on the same machine more specifically for the address space and the segments section since they were the base of the rest of the code. 
